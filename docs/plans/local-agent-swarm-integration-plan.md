@@ -9,6 +9,7 @@ This document outlines a comprehensive plan to extend claude-flow to support **l
 - **C2C (Cache-to-Cache)** - Direct semantic communication via KV-cache fusion for 2x speedup
 - **ADOL Protocol** - Token-efficient data layer reducing context bloat
 - **Local Providers** - Ollama, ONNX, llama.cpp, vLLM for edge/privacy deployments
+- **Gemini-3-Pro** - High-capacity cloud provider (2M tokens/day, no 5-hour windows, 1M+ context) via `gemini` CLI
 
 ---
 
@@ -33,6 +34,7 @@ v3/@claude-flow/integration/src/multi-model-router.ts
 | ONNX | ⚠️ Stub Only | Phi-4 (defined, not implemented) |
 | LiteLLM | ⚠️ Stub Only | Unified API |
 | Google | ⚠️ Stub Only | Gemini |
+| **Gemini-3-Pro** | 🆕 Planned | Gemini 3 Pro (CLI: `gemini`) |
 
 ### 1.2 Key Entry Points for Extension
 
@@ -63,8 +65,17 @@ Tier 1: Agent Booster (WASM) - <1ms, $0
 Tier 2A: Local Models (Qwen/Llama) - ~600ms, FREE - Privacy/Offline
 Tier 2B: Haiku - ~500ms, $0.0002 - Cloud fallback
      ↓
-Tier 3: Sonnet/Opus - 2-5s, $0.003-0.015 - Complex reasoning
+Tier 3A: Gemini-3-Pro - 1-3s, FREE (2M/day) - High context, long-running
+Tier 3B: Sonnet/Opus - 2-5s, $0.003-0.015 - Complex reasoning
 ```
+
+**Gemini-3-Pro Strategic Advantages:**
+| Feature | Value | Swarm Benefit |
+|---------|-------|---------------|
+| Daily tokens | 2,000,000 | Sustained high-volume work |
+| Rate windows | None | Continuous operation |
+| Context window | 1M+ tokens | Entire codebases in context |
+| CLI access | `gemini` command | Seamless integration |
 
 ---
 
@@ -195,6 +206,91 @@ export class VLLMProvider implements Provider {
 }
 ```
 
+#### 2.1.5 Gemini-3-Pro Integration (High-Capacity Cloud)
+
+**Access:** Command-line via `gemini` (Claude Code equivalent for Gemini)
+
+Gemini-3-Pro provides a high-capacity cloud option with generous token limits:
+
+| Feature | Specification |
+|---------|---------------|
+| Daily Token Limit | 2,000,000 tokens |
+| Rate Limiting | No 5-hour windows |
+| Context Window | 1M+ tokens |
+| Invocation | CLI: `gemini` command |
+
+```typescript
+// v3/@claude-flow/providers/src/gemini-provider.ts
+import { spawn } from 'child_process';
+
+export class GeminiProvider implements Provider {
+  private dailyTokensUsed: number = 0;
+  private dailyLimit: number = 2_000_000;
+
+  constructor(config: GeminiConfig = {}) {
+    this.command = config.command || 'gemini';
+    this.resetDailyCounterAtMidnight();
+  }
+
+  async generate(prompt: string, options: GenerateOptions): Promise<Response> {
+    // Check daily token budget
+    const estimatedTokens = this.estimateTokens(prompt);
+    if (this.dailyTokensUsed + estimatedTokens > this.dailyLimit) {
+      throw new TokenBudgetExceededError('Daily 2M token limit reached');
+    }
+
+    // Invoke gemini CLI
+    const result = await this.invokeGeminiCLI(prompt, options);
+
+    // Track usage
+    this.dailyTokensUsed += result.tokensUsed;
+
+    return result;
+  }
+
+  private async invokeGeminiCLI(
+    prompt: string,
+    options: GenerateOptions
+  ): Promise<CLIResponse> {
+    // Spawn gemini process similar to Claude Code
+    return new Promise((resolve, reject) => {
+      const gemini = spawn(this.command, ['--prompt', prompt], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      let output = '';
+      gemini.stdout.on('data', (data) => output += data);
+      gemini.on('close', (code) => {
+        if (code === 0) {
+          resolve({ content: output, tokensUsed: this.countTokens(output) });
+        } else {
+          reject(new Error(`Gemini exited with code ${code}`));
+        }
+      });
+    });
+  }
+
+  getRemainingDailyTokens(): number {
+    return this.dailyLimit - this.dailyTokensUsed;
+  }
+}
+```
+
+**Strategic Advantages of Gemini-3-Pro:**
+
+| Advantage | Benefit for Swarms |
+|-----------|-------------------|
+| 2M daily tokens | Sustained high-volume agent work without rate limits |
+| No 5-hour windows | Continuous operation for long-running tasks |
+| 1M+ context | Entire codebases in context for research agents |
+| CLI parity | Seamless integration with Claude Code patterns |
+
+**Recommended Use Cases:**
+- **Research Agents**: Large context for codebase analysis
+- **Long-running Tasks**: No rate limit interruptions
+- **Burst Workloads**: High daily capacity for intensive periods
+- **Fallback Provider**: When Anthropic rate limits are hit
+
 ### 2.2 Provider Selection Algorithm
 
 ```typescript
@@ -232,8 +328,49 @@ export async function selectProvider(
     }
   }
 
-  // Fallback to cloud
+  // Fallback to cloud (with Gemini-3-Pro option)
   return selectCloudProvider(task, complexity);
+}
+
+// v3/@claude-flow/integration/src/cloud-provider-router.ts
+export async function selectCloudProvider(
+  task: TaskContext,
+  complexity: number
+): Promise<ProviderSelection> {
+  const gemini = getGeminiProvider();
+  const anthropic = getAnthropicProvider();
+
+  // Check if this is a high-context task (benefits from Gemini's 1M+ context)
+  const isHighContext = task.contextSize > 100_000;
+
+  // Check if we're in a rate-limited state with Anthropic
+  const anthropicRateLimited = await checkAnthropicRateLimits();
+
+  // Check Gemini daily budget
+  const geminiHasBudget = gemini.getRemainingDailyTokens() > 50_000;
+
+  // Route to Gemini-3-Pro for:
+  // 1. High-context tasks (research, codebase analysis)
+  // 2. When Anthropic is rate-limited
+  // 3. Long-running sustained tasks
+  if (geminiHasBudget && (isHighContext || anthropicRateLimited || task.longRunning)) {
+    return {
+      provider: 'gemini-3-pro',
+      model: 'gemini-3-pro',
+      tier: 3,
+      reason: isHighContext ? 'high-context' :
+              anthropicRateLimited ? 'anthropic-rate-limited' : 'long-running'
+    };
+  }
+
+  // Default to Anthropic based on complexity
+  if (complexity < 0.5) {
+    return { provider: 'anthropic', model: 'claude-3-5-haiku', tier: 2 };
+  } else if (complexity < 0.8) {
+    return { provider: 'anthropic', model: 'claude-3-5-sonnet', tier: 3 };
+  } else {
+    return { provider: 'anthropic', model: 'claude-opus-4-5', tier: 3 };
+  }
 }
 ```
 
@@ -263,6 +400,51 @@ A swarm can now consist of mixed cloud + local agents:
                     SHARED MEMORY
                    (HNSW + SQLite)
 ```
+
+**Extended Multi-Cloud + Local Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         COORDINATOR LAYER                                │
+├─────────────────────────────┬───────────────────────────────────────────┤
+│      CLAUDE OPUS 4.5        │           GEMINI-3-PRO                    │
+│    (Strategic Planning)     │      (High-Context Research)              │
+│    Complex reasoning        │      1M+ context, 2M/day tokens           │
+│    5-hour window limits     │      No rate limit windows                │
+└──────────────┬──────────────┴──────────────┬────────────────────────────┘
+               │                              │
+               └──────────────┬───────────────┘
+                              │
+          ┌───────────────────┼───────────────────┐
+          │                   │                   │
+          ▼                   ▼                   ▼
+┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+│ CODER (Local)   │   │ RESEARCHER      │   │ TESTER (Local)  │
+│ Qwen 7B/Ollama  │   │ Gemini-3-Pro    │   │ Llama 3B/Ollama │
+│ Fast code gen   │   │ Large context   │   │ Fast validation │
+│ $0 cost         │   │ Codebase-wide   │   │ $0 cost         │
+└─────────────────┘   └─────────────────┘   └─────────────────┘
+          │                   │                   │
+          └───────────────────┴───────────────────┘
+                              │
+                    ┌─────────┴─────────┐
+                    │   SHARED MEMORY   │
+                    │  (HNSW + SQLite)  │
+                    │  + Token Budget   │
+                    │    Tracking       │
+                    └───────────────────┘
+```
+
+**Provider Load Balancing Strategy:**
+
+| Scenario | Primary Provider | Fallback | Rationale |
+|----------|------------------|----------|-----------|
+| Complex reasoning | Claude Opus | Gemini-3-Pro | Best capability |
+| Large context (>100K) | Gemini-3-Pro | Claude Sonnet | Context window |
+| Anthropic rate-limited | Gemini-3-Pro | Local (Qwen) | Availability |
+| Privacy/offline | Ollama (local) | None | Data sovereignty |
+| Long-running tasks | Gemini-3-Pro | Claude Haiku | No windows |
+| Fast operations | Local (Qwen/Llama) | Haiku | Speed + cost |
 
 ---
 
@@ -944,7 +1126,16 @@ export class ProtocolSelector {
     },
     "cloud": {
       "anthropic": { "enabled": true },
-      "openai": { "enabled": false }
+      "openai": { "enabled": false },
+      "gemini": {
+        "enabled": true,
+        "model": "gemini-3-pro",
+        "command": "gemini",
+        "dailyTokenLimit": 2000000,
+        "preferForHighContext": true,
+        "preferForLongRunning": true,
+        "fallbackWhenAnthropicRateLimited": true
+      }
     }
   },
 
@@ -989,12 +1180,25 @@ npx claude-flow@v3 providers add ollama
 npx claude-flow@v3 providers test ollama
 npx claude-flow@v3 models pull qwen2.5:7b
 
+# Setup Gemini-3-Pro provider
+npx claude-flow@v3 providers add gemini --command gemini --daily-limit 2000000
+npx claude-flow@v3 providers test gemini
+npx claude-flow@v3 providers status gemini  # Check daily token usage
+
 # Spawn local agents
 npx claude-flow@v3 agent spawn -t coder --model qwen2.5:7b --local
 npx claude-flow@v3 agent spawn -t researcher --model qwen2.5:14b --local
 
-# Initialize hybrid swarm
+# Spawn Gemini-powered agents (for high-context tasks)
+npx claude-flow@v3 agent spawn -t researcher --provider gemini --model gemini-3-pro
+npx claude-flow@v3 agent spawn -t analyzer --provider gemini --long-running
+
+# Initialize hybrid swarm (local + multi-cloud)
 npx claude-flow@v3 swarm init --topology hierarchical --local-workers 4 --cloud-queen
+npx claude-flow@v3 swarm init --topology hierarchical \
+  --queen anthropic:claude-opus-4-5 \
+  --workers ollama:qwen2.5:7b,gemini:gemini-3-pro,ollama:llama3.2:3b \
+  --fallback gemini:gemini-3-pro
 
 # Protocol tools
 npx claude-flow@v3 aisp convert "find all security issues"
@@ -1003,6 +1207,11 @@ npx claude-flow@v3 protocols status
 
 # Compression metrics
 npx claude-flow@v3 metrics compression --last-hour
+
+# Token budget management
+npx claude-flow@v3 providers budget gemini              # Check remaining tokens
+npx claude-flow@v3 providers budget gemini --reset      # Reset daily counter
+npx claude-flow@v3 providers budget --all               # All provider budgets
 ```
 
 ### 9.3 Programmatic Usage
@@ -1012,7 +1221,11 @@ import { ClaudeFlow } from 'claude-flow';
 
 const flow = new ClaudeFlow({
   providers: {
-    local: { ollama: { enabled: true } }
+    local: { ollama: { enabled: true } },
+    cloud: {
+      anthropic: { enabled: true },
+      gemini: { enabled: true, command: 'gemini', dailyTokenLimit: 2_000_000 }
+    }
   },
   protocols: {
     aisp: { enabled: true },
@@ -1020,15 +1233,20 @@ const flow = new ClaudeFlow({
   }
 });
 
-// Initialize hybrid swarm
+// Initialize hybrid swarm with multi-cloud + local
 const swarm = await flow.swarm.init({
   topology: 'hierarchical',
-  queen: { provider: 'anthropic', model: 'claude-3-5-sonnet' },
+  queen: { provider: 'anthropic', model: 'claude-opus-4-5' },
   workers: [
     { type: 'coder', provider: 'ollama', model: 'qwen2.5:7b' },
+    { type: 'researcher', provider: 'gemini', model: 'gemini-3-pro' }, // High-context research
     { type: 'tester', provider: 'ollama', model: 'llama3.2:3b' },
     { type: 'reviewer', provider: 'ollama', model: 'qwen2.5:3b' }
-  ]
+  ],
+  fallback: {
+    // When Anthropic rate-limited, use Gemini for queen tasks
+    anthropicRateLimited: { provider: 'gemini', model: 'gemini-3-pro' }
+  }
 });
 
 // Execute with automatic protocol selection
@@ -1036,6 +1254,19 @@ const result = await swarm.execute({
   task: 'Implement user authentication with tests',
   protocols: ['aisp', 'c2c', 'adol'] // Automatic selection if omitted
 });
+
+// Example: Long-running codebase analysis (benefits from Gemini's no-window limits)
+const analysisSwarm = await flow.swarm.init({
+  topology: 'hierarchical',
+  queen: { provider: 'gemini', model: 'gemini-3-pro' }, // No 5-hour windows
+  workers: [
+    { type: 'analyzer', provider: 'gemini', model: 'gemini-3-pro' },
+    { type: 'documenter', provider: 'ollama', model: 'qwen2.5:7b' }
+  ]
+});
+
+// Check token budget
+console.log(`Gemini tokens remaining: ${flow.providers.gemini.getRemainingDailyTokens()}`);
 ```
 
 ---
@@ -1125,6 +1356,7 @@ export class LocalModelGuard {
 | Ollama | [github.com/ollama/ollama](https://github.com/ollama/ollama) | Local models |
 | Swarms | [github.com/kyegomez/swarms](https://github.com/kyegomez/swarms) | Orchestration reference |
 | LMCache | [github.com/LMCache/LMCache](https://github.com/LMCache/LMCache) | KV-cache sharing |
+| **Gemini CLI** | CLI command: `gemini` | **Cloud provider (2M tokens/day)** |
 
 ### B. Research Papers
 
@@ -1143,8 +1375,34 @@ export class LocalModelGuard {
 | Math/Logic | Qwen-Math-7B | Ollama | Specialized |
 | Complex tasks | Claude Sonnet | Anthropic | Highest capability |
 | Strategic | Claude Opus | Anthropic | Deep reasoning |
+| **Large context research** | **Gemini-3-Pro** | **Gemini CLI** | **1M+ context, entire codebases** |
+| **Long-running analysis** | **Gemini-3-Pro** | **Gemini CLI** | **No 5-hour windows, 2M/day** |
+| **Burst workloads** | **Gemini-3-Pro** | **Gemini CLI** | **High daily capacity** |
+| **Anthropic fallback** | **Gemini-3-Pro** | **Gemini CLI** | **Rate limit bypass** |
 
-### D. Compression Technique Comparison
+### D. Claude vs Gemini-3-Pro Comparison
+
+| Feature | Claude (Opus/Sonnet) | Gemini-3-Pro |
+|---------|---------------------|--------------|
+| **Daily token limit** | Usage-based (paid) | 2M tokens FREE |
+| **Rate limiting** | 5-hour windows | None |
+| **Context window** | 200K (Sonnet), 200K (Opus) | 1M+ |
+| **Invocation** | `claude` CLI | `gemini` CLI |
+| **Best for** | Complex reasoning, code gen | Large context, sustained work |
+| **Availability** | May hit rate limits | Always available |
+| **Cost** | $0.003-0.015/1K tokens | $0 (within daily limit) |
+
+**Decision Matrix:**
+
+| Use Claude When... | Use Gemini-3-Pro When... |
+|-------------------|-------------------------|
+| Complex multi-step reasoning | Analyzing entire codebases |
+| Code generation with high precision | Long-running batch tasks |
+| Security-critical decisions | Rate-limited by Anthropic |
+| Tool-intensive workflows | Research requiring 500K+ context |
+| Opus-level strategic planning | Continuous operation (no windows) |
+
+### E. Compression Technique Comparison
 
 | Technique | Reduction | Accuracy | Latency | Best For |
 |-----------|-----------|----------|---------|----------|
@@ -1154,19 +1412,39 @@ export class LocalModelGuard {
 | Step Entropy | 80% | 0 to +2% | +20ms | Reasoning |
 | F-CoT | 60-70% | -1 to 0% | +10ms | Quick tasks |
 
+### F. Multi-Cloud Fallback Strategy
+
+```
+Priority Order:
+1. Local (Ollama) - If preferLocal && available
+2. Claude Opus/Sonnet - For complex reasoning (if not rate-limited)
+3. Gemini-3-Pro - High context, long-running, or when Claude rate-limited
+4. Claude Haiku - Simple tasks, low latency
+5. Local fallback - Privacy mode, offline, or all cloud unavailable
+
+Rate Limit Recovery:
+- Anthropic 5-hour window hit → Route to Gemini-3-Pro
+- Gemini daily limit hit (2M) → Route to local models
+- All cloud unavailable → Local-only mode
+```
+
 ---
 
 ## Conclusion
 
-This plan extends claude-flow to support local LLMs as first-class swarm participants with three key innovations:
+This plan extends claude-flow to support local LLMs and multi-cloud providers as first-class swarm participants with four key innovations:
 
 1. **AISP Protocol**: Eliminates communication ambiguity through mathematical notation
 2. **C2C Integration**: Enables direct semantic transfer between local models
 3. **ADOL + Compression**: Reduces token overhead by 60-90%
+4. **Gemini-3-Pro Integration**: High-capacity cloud fallback with 2M daily tokens and no rate windows
 
 The result is a hybrid swarm architecture that can:
 - Run offline with full local models
-- Mix cloud intelligence with local execution
+- Mix cloud intelligence (Claude + Gemini) with local execution
+- Seamlessly fallback when rate-limited (Anthropic → Gemini → Local)
+- Handle large-context tasks with Gemini's 1M+ context window
+- Operate continuously without 5-hour window interruptions
 - Communicate with minimal token overhead
 - Maintain semantic precision across heterogeneous models
 
@@ -1175,9 +1453,12 @@ The result is a hybrid swarm architecture that can:
 - 3-10x latency improvement for local operations
 - 60-100% token reduction through compression
 - <2% ambiguity rate (vs 40-65% natural language)
+- 2M tokens/day additional capacity via Gemini-3-Pro
+- Zero downtime from rate limiting (multi-cloud fallback)
 
 ---
 
-*Document Version: 1.0.0*
+*Document Version: 1.1.0*
 *Last Updated: 2026-02-01*
 *Author: Claude Code + Swarm Research*
+*Revision: Added Gemini-3-Pro integration (2M tokens/day, no rate windows)*
