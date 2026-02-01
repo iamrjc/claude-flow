@@ -1,0 +1,55 @@
+{
+  "name": "@claude-flow/protocols",
+  "version": "3.0.0-alpha.1",
+  "description": "AISP (AI Symbolic Protocol) Parser, C2C, and ADOL protocols for Claude Flow",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./aisp": {
+      "types": "./dist/aisp/index.d.ts",
+      "import": "./dist/aisp/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "claude-flow",
+    "aisp",
+    "protocol",
+    "parser",
+    "symbols",
+    "c2c",
+    "adol"
+  ],
+  "author": "Claude Flow Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^4.0.16",
+    "typescript": "^5.5.0",
+    "vitest": "^4.0.16"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "v3alpha"
+  }
+}

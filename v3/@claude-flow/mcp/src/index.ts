@@ -109,6 +109,30 @@ export type { IMCPServer } from './server.js';
 // Tool Registry
 export { ToolRegistry, createToolRegistry, defineTool } from './tool-registry.js';
 
+// MCP Tools (v3)
+export {
+  // Tool categories
+  agentTools,
+  taskTools,
+  memoryTools,
+  coordinationTools,
+  swarmTools,
+  allMCPTools,
+  toolCategories,
+  toolCounts,
+  // Helpers
+  getAllToolNames,
+  getToolsByCategory,
+  // Executor
+  ToolExecutor,
+  createToolExecutor,
+} from './tools/index.js';
+
+export type {
+  ToolExecutionMetrics,
+  ToolExecutorConfig,
+} from './tools/tool-executor.js';
+
 // Session Manager
 import { SessionManager, createSessionManager } from './session-manager.js';
 export { SessionManager, createSessionManager };

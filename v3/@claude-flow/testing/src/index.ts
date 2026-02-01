@@ -228,5 +228,8 @@ export * from './regression/index.js';
 // V2 Compatibility Testing - Validate backward compatibility
 export * from './v2-compat/index.js';
 
+// E2E Integration Testing - End-to-end system tests
+export * from './e2e/index.js';
+
 // Re-export commonly used Vitest utilities
 export { vi, expect, describe, it, test, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';

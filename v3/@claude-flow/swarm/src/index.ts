@@ -60,15 +60,10 @@ export type {
   TopologyConfig,
   TopologyState,
   TopologyNode,
-  ConsensusAlgorithm,
   ConsensusConfig,
   ConsensusProposal,
   ConsensusVote,
-  ConsensusResult,
-  Message,
-  MessageType,
   MessageBusConfig,
-  MessageBusStats,
   CoordinatorConfig,
   CoordinatorState,
   CoordinatorMetrics,
@@ -294,6 +289,84 @@ export {
   type FederationEvent,
   type FederationEventType,
 } from './federation-hub.js';
+
+// =============================================================================
+// Coordination Engine (WP16)
+// =============================================================================
+
+export {
+  CoordinationSession,
+  SessionId,
+  SessionState,
+  type Participant,
+  type SessionMetrics,
+  type SessionSnapshot,
+} from './domain/models/coordination-session.js';
+
+export {
+  Message,
+  MessageId,
+  MessageType,
+  MessagePriority,
+  type MessageCreateParams,
+  type MessageSnapshot,
+  type RequestOptions as MessageRequestOptions,
+  type MessageEnvelope,
+} from './domain/models/message.js';
+
+export {
+  Proposal,
+  ProposalId,
+  Vote,
+  ConsensusResult,
+  ConsensusAlgorithm,
+  ProposalStatus,
+  type VoteCreateParams,
+  type ProposalCreateParams,
+  type ConsensusResultParams,
+  type VoteSnapshot,
+  type ProposalSnapshot,
+  type ConsensusResultSnapshot,
+} from './domain/models/consensus.js';
+
+export {
+  type IMessageBus,
+  type MessageHandler,
+  type RequestOptions,
+  type MessageBusStats,
+  type TopicSubscription,
+  type MessageFilter,
+  type MessageQueue,
+  type DeliveryOptions,
+  type MessageBusEvent,
+  MessageBusEventType,
+} from './domain/interfaces/message-bus.js';
+
+export {
+  CoordinationService,
+  createCoordinationService,
+  type CoordinationConfig,
+  type CreateSessionOptions,
+  type IConsensusService,
+  type ConsensusRequestParams,
+} from './application/services/coordination-service.js';
+
+export {
+  ConsensusService,
+  createConsensusService,
+} from './application/services/consensus-service.js';
+
+export {
+  EventMessageBus,
+  createEventMessageBus,
+} from './infrastructure/messaging/event-message-bus.js';
+
+export {
+  Mailbox,
+  createMailbox,
+  type MailboxConfig,
+  type MailboxStats,
+} from './infrastructure/messaging/mailbox.js';
 
 // =============================================================================
 // Default Export

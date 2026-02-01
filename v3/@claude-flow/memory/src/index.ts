@@ -102,6 +102,43 @@ export {
   PERFORMANCE_TARGETS,
 } from './types.js';
 
+// ===== Domain Models =====
+export { MemoryId } from './domain/models/memory-id.js';
+export type { MemoryMetadata } from './domain/models/memory-metadata.js';
+export {
+  createDefaultMetadata,
+  mergeMetadata,
+  validateMetadata,
+} from './domain/models/memory-metadata.js';
+export {
+  MemoryNamespace,
+  NamespacePolicies,
+} from './domain/models/memory-namespace.js';
+export type {
+  NamespacePolicy,
+  NamespaceStats,
+} from './domain/models/memory-namespace.js';
+
+// ===== Domain Interfaces =====
+export type {
+  IVectorIndex,
+  IHNSWIndex,
+  VectorSearchResult,
+  VectorSearchOptions,
+  IndexStats,
+} from './domain/interfaces/vector-index.js';
+export { VectorIndexBuilder } from './domain/interfaces/vector-index.js';
+
+// ===== Infrastructure =====
+export type {
+  IEmbeddingService,
+  EmbeddingProviderConfig,
+} from './infrastructure/embeddings/embedding-service.js';
+export {
+  EmbeddingService,
+  MockEmbeddingService,
+} from './infrastructure/embeddings/embedding-service.js';
+
 // ===== Core Components =====
 export { AgentDBAdapter } from './agentdb-adapter.js';
 export type { AgentDBAdapterConfig } from './agentdb-adapter.js';
