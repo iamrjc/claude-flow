@@ -10,6 +10,7 @@ This document outlines a comprehensive plan to extend claude-flow to support **l
 - **ADOL Protocol** - Token-efficient data layer reducing context bloat
 - **Local Providers** - Ollama, ONNX, llama.cpp, vLLM for edge/privacy deployments
 - **Gemini-3-Pro** - High-capacity cloud provider (2M tokens/day, no 5-hour windows, 1M+ context) via `gemini` CLI
+- **Networked Local Agents** - Distributed swarm across LAN devices (laptops, desktops, servers) with auto-discovery
 
 ---
 
@@ -290,6 +291,299 @@ export class GeminiProvider implements Provider {
 - **Long-running Tasks**: No rate limit interruptions
 - **Burst Workloads**: High daily capacity for intensive periods
 - **Fallback Provider**: When Anthropic rate limits are hit
+
+#### 2.1.6 Networked Local Agents (Distributed LAN Swarm)
+
+Run models across multiple machines on your local network - laptops, desktops, servers, even Raspberry Pis - and coordinate them as a unified swarm.
+
+**Architecture Overview:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         YOUR WORKSTATION                                     │
+│                    (Coordinator - claude-flow)                               │
+│                         192.168.1.100                                        │
+└─────────────────────────────┬───────────────────────────────────────────────┘
+                              │
+                    Local Network (LAN)
+                              │
+        ┌─────────────────────┼─────────────────────┬─────────────────────┐
+        │                     │                     │                     │
+        ▼                     ▼                     ▼                     ▼
+┌───────────────┐     ┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│  LAPTOP 1     │     │  DESKTOP 2    │     │  SERVER 3     │     │ RASPBERRY PI  │
+│  Ubuntu 24.04 │     │  Ubuntu 22.04 │     │  Ubuntu 22.04 │     │  Ubuntu 24.04 │
+│  192.168.1.101│     │  192.168.1.102│     │  192.168.1.103│     │  192.168.1.104│
+│               │     │               │     │               │     │               │
+│  RTX 3080     │     │  RTX 4090     │     │  2x RTX A6000 │     │  CPU only     │
+│  12GB VRAM    │     │  24GB VRAM    │     │  96GB VRAM    │     │  8GB RAM      │
+│               │     │               │     │               │     │               │
+│  Qwen 14B     │     │  Qwen 32B     │     │  Llama 70B    │     │  Qwen 0.5B    │
+│  Llama 8B     │     │  DeepSeek 33B │     │  Mixtral 8x22B│     │  Phi-3 mini   │
+│               │     │               │     │               │     │               │
+│  :11434       │     │  :11434       │     │  :11434       │     │  :11434       │
+│  :3456 agent  │     │  :3456 agent  │     │  :3456 agent  │     │  :3456 agent  │
+└───────────────┘     └───────────────┘     └───────────────┘     └───────────────┘
+```
+
+**Discovery Mechanisms:**
+
+| Method | How It Works | Best For |
+|--------|--------------|----------|
+| **mDNS/Bonjour** | Zero-config, agents auto-announce on `_claude-flow._tcp.local` | Home labs, small teams |
+| **Static Config** | IP addresses listed in config file | Stable infrastructure |
+| **Registry** | Central server tracks all agents | Enterprise, multi-site |
+| **Gossip** | Agents share peer info with each other | Large, dynamic clusters |
+
+```typescript
+// v3/@claude-flow/network/src/discovery.ts
+import mdns from 'multicast-dns';
+
+export class AgentDiscovery extends EventEmitter {
+  private agents: Map<string, NetworkAgent> = new Map();
+
+  /**
+   * Discover agents on the local network using mDNS
+   */
+  async discoverAgents(): Promise<NetworkAgent[]> {
+    return new Promise((resolve) => {
+      const discovered: NetworkAgent[] = [];
+
+      this.mdns.query({
+        questions: [{ name: '_claude-flow-agent._tcp.local', type: 'PTR' }]
+      });
+
+      this.mdns.on('response', (response) => {
+        for (const answer of response.answers) {
+          if (answer.type === 'SRV') {
+            const agent = this.parseAgentRecord(answer);
+            discovered.push(agent);
+            this.agents.set(agent.id, agent);
+            this.emit('agent-discovered', agent);
+          }
+        }
+      });
+
+      // Give network 2 seconds to respond
+      setTimeout(() => resolve(discovered), 2000);
+    });
+  }
+
+  /**
+   * Advertise this machine as an available agent
+   */
+  advertise(config: AgentAdvertisement): void {
+    this.mdns.respond({
+      answers: [
+        {
+          name: '_claude-flow-agent._tcp.local',
+          type: 'PTR',
+          data: `${config.id}._claude-flow-agent._tcp.local`
+        },
+        {
+          name: `${config.id}._claude-flow-agent._tcp.local`,
+          type: 'SRV',
+          data: { port: config.port, target: config.hostname }
+        },
+        {
+          name: `${config.id}._claude-flow-agent._tcp.local`,
+          type: 'TXT',
+          data: JSON.stringify({
+            models: config.models,
+            gpu: config.gpu,
+            vram: config.vramGB,
+            status: 'available'
+          })
+        }
+      ]
+    });
+  }
+}
+```
+
+**Network Agent Provider:**
+
+```typescript
+// v3/@claude-flow/network/src/network-provider.ts
+export class NetworkAgentProvider implements Provider {
+  private discovery: AgentDiscovery;
+  private loadBalancer: LoadBalancer;
+  private healthChecker: HealthChecker;
+
+  constructor(config: NetworkConfig) {
+    this.discovery = new AgentDiscovery(config.discovery);
+    this.loadBalancer = new LoadBalancer(config.loadBalancing);
+    this.healthChecker = new HealthChecker(config.healthCheck);
+  }
+
+  async generate(prompt: string, options: GenerateOptions): Promise<Response> {
+    // Find best available agent for this model
+    const agent = await this.selectAgent(options.model);
+
+    if (!agent) {
+      throw new NoAvailableAgentError(`No agent available for model: ${options.model}`);
+    }
+
+    // Forward request to remote Ollama instance
+    const client = new Ollama({ host: `http://${agent.host}:${agent.port}` });
+
+    return client.generate({
+      model: options.model,
+      prompt,
+      stream: options.stream
+    });
+  }
+
+  private async selectAgent(model: string): Promise<NetworkAgent | null> {
+    // Get all healthy agents that have this model
+    const candidates = Array.from(this.discovery.agents.values())
+      .filter(a => a.models.includes(model))
+      .filter(a => this.healthChecker.isHealthy(a.id));
+
+    if (candidates.length === 0) return null;
+
+    // Use load balancer to pick the best one
+    return this.loadBalancer.select(candidates);
+  }
+}
+```
+
+**Load Balancing Strategies:**
+
+| Strategy | Description | Best For |
+|----------|-------------|----------|
+| `round-robin` | Rotate through agents sequentially | Equal hardware |
+| `least-connections` | Pick agent with fewest active requests | Mixed workloads |
+| `weighted` | Assign weights based on GPU power | Heterogeneous hardware |
+| `latency-based` | Pick fastest responding agent | Latency-sensitive tasks |
+| `capability-match` | Match task requirements to agent specs | Specialized workloads |
+
+```typescript
+// v3/@claude-flow/network/src/load-balancer.ts
+export class LoadBalancer {
+  selectAgent(agents: NetworkAgent[], task?: TaskContext): NetworkAgent {
+    switch (this.strategy) {
+      case 'weighted':
+        // Weight by VRAM (more VRAM = handle bigger models faster)
+        const totalWeight = agents.reduce((sum, a) => sum + a.vramGB, 0);
+        let random = Math.random() * totalWeight;
+        for (const agent of agents) {
+          random -= agent.vramGB;
+          if (random <= 0) return agent;
+        }
+        return agents[0];
+
+      case 'capability-match':
+        // If task needs 70B model, only agents with 48GB+ VRAM
+        const requiredVRAM = this.estimateVRAM(task?.model);
+        const capable = agents.filter(a => a.vramGB >= requiredVRAM);
+        return capable[0] || agents[0];
+
+      case 'least-connections':
+        return agents.reduce((min, a) =>
+          a.activeConnections < min.activeConnections ? a : min
+        );
+
+      default: // round-robin
+        this.currentIndex = (this.currentIndex + 1) % agents.length;
+        return agents[this.currentIndex];
+    }
+  }
+}
+```
+
+**Security Model:**
+
+```typescript
+// v3/@claude-flow/network/src/security.ts
+export interface NetworkSecurityConfig {
+  // Authentication
+  authentication: {
+    method: 'none' | 'api-key' | 'mtls';
+    apiKey?: string;
+    allowedIPs?: string[];  // CIDR notation: ['192.168.1.0/24']
+  };
+
+  // Encryption
+  tls: {
+    enabled: boolean;
+    certPath?: string;
+    keyPath?: string;
+    caCertPath?: string;  // For mTLS
+  };
+
+  // Rate limiting per agent
+  rateLimit: {
+    requestsPerMinute: number;
+    tokensPerMinute: number;
+  };
+}
+```
+
+**Configuration Example:**
+
+```json
+{
+  "network": {
+    "enabled": true,
+    "discovery": {
+      "method": "mdns",
+      "fallbackHosts": [
+        { "host": "192.168.1.101", "port": 11434 },
+        { "host": "192.168.1.102", "port": 11434 }
+      ]
+    },
+    "loadBalancing": {
+      "strategy": "weighted",
+      "healthCheckIntervalMs": 10000,
+      "unhealthyThreshold": 3
+    },
+    "security": {
+      "authentication": {
+        "method": "api-key",
+        "apiKey": "${CLAUDE_FLOW_NETWORK_KEY}"
+      },
+      "tls": {
+        "enabled": false
+      },
+      "allowedNetworks": ["192.168.1.0/24", "10.0.0.0/8"]
+    }
+  }
+}
+```
+
+**CLI Commands for Network Agents:**
+
+```bash
+# Discover agents on the network
+npx claude-flow@v3 network discover
+# Output:
+# Found 4 agents:
+#   laptop-1 (192.168.1.101) - Qwen 14B, Llama 8B [RTX 3080, 12GB]
+#   desktop-2 (192.168.1.102) - Qwen 32B [RTX 4090, 24GB]
+#   server-3 (192.168.1.103) - Llama 70B, Mixtral [2x A6000, 96GB]
+#   rpi-4 (192.168.1.104) - Qwen 0.5B [CPU, 8GB RAM]
+
+# Check network agent health
+npx claude-flow@v3 network health
+# Output:
+# laptop-1: ✅ healthy (latency: 5ms, load: 23%)
+# desktop-2: ✅ healthy (latency: 3ms, load: 45%)
+# server-3: ✅ healthy (latency: 8ms, load: 12%)
+# rpi-4: ⚠️ degraded (latency: 150ms, load: 89%)
+
+# Spawn agent on specific network node
+npx claude-flow@v3 agent spawn -t coder --model qwen2.5:32b --node desktop-2
+
+# View network topology
+npx claude-flow@v3 network topology
+
+# Add static host
+npx claude-flow@v3 network add-host 192.168.1.105 --port 11434
+
+# Test connectivity to all agents
+npx claude-flow@v3 network ping-all
+```
 
 ### 2.2 Provider Selection Algorithm
 
@@ -1430,23 +1724,567 @@ Rate Limit Recovery:
 
 ---
 
+## Appendix G: ELI5 Ubuntu Setup Guide - Deploy Swarm Agents on Your Network
+
+This guide explains how to set up Ubuntu machines (laptops, desktops, servers) as swarm workers. Written for beginners - no prior Linux experience required.
+
+### G.1 What We're Building (The Big Picture)
+
+**Imagine this:** You have a main computer where you work. But you also have:
+- An old laptop sitting in the corner
+- A desktop PC you use for gaming
+- Maybe a server or Raspberry Pi
+
+Instead of those machines sitting idle, we'll turn them into AI workers that help your main computer think faster. It's like having a team of assistants, each running on a different computer in your house/office.
+
+```
+    YOUR MAIN COMPUTER (Boss)
+           |
+    Your WiFi/Network
+           |
+    ┌──────┼──────┐
+    │      │      │
+ Laptop  Desktop  Server
+ (Worker) (Worker) (Worker)
+
+When you ask Claude to do something complex,
+it can send parts of the work to your other computers!
+```
+
+**Why would you want this?**
+- 🆓 **Free AI** - Run AI models without paying per-token
+- 🔒 **Private** - Your data never leaves your network
+- ⚡ **Faster** - Multiple computers = parallel processing
+- 🎮 **Use idle hardware** - Put that gaming PC to work!
+
+### G.2 What You Need (Prerequisites)
+
+**For each worker machine:**
+
+| Requirement | Minimum | Recommended |
+|-------------|---------|-------------|
+| Ubuntu Version | 22.04 LTS | 24.04 LTS |
+| RAM | 8 GB | 16+ GB |
+| Storage | 20 GB free | 100+ GB free |
+| Network | Same WiFi/LAN | Ethernet preferred |
+| GPU (optional) | - | NVIDIA with 8+ GB VRAM |
+
+**Don't have a GPU?** No problem! CPUs can run smaller models (0.5B-3B parameters) just fine. They're slower but still useful for simple tasks.
+
+**Model Size Guide:**
+
+| Model Size | VRAM Needed | Example Models | Good For |
+|------------|-------------|----------------|----------|
+| 0.5B-1B | CPU or 2GB | Qwen 0.5B, Phi-3 mini | Simple Q&A, fast responses |
+| 3B-7B | 4-8 GB | Qwen 7B, Llama 3.2 | General tasks, coding help |
+| 13B-14B | 10-12 GB | Qwen 14B | Better reasoning |
+| 32B-34B | 20-24 GB | Qwen 32B, DeepSeek 33B | Near cloud-quality |
+| 70B | 40-48 GB | Llama 70B | Best local quality |
+
+### G.3 Step-by-Step Setup for Each Worker Machine
+
+#### Step 1: Install Ubuntu (Skip if already installed)
+
+1. Download Ubuntu from: https://ubuntu.com/download/desktop
+2. Create a bootable USB using Rufus (Windows) or Etcher (Mac)
+3. Boot from USB and follow the installer
+4. Choose "Minimal installation" to save space
+
+#### Step 2: Open Terminal
+
+Press `Ctrl + Alt + T` or search for "Terminal" in your applications.
+
+#### Step 3: Update Your System
+
+Copy and paste this (press Enter after):
+
+```bash
+sudo apt update && sudo apt upgrade -y
+```
+
+It will ask for your password (the one you created during Ubuntu install). When you type, you won't see anything - that's normal. Just type and press Enter.
+
+#### Step 4: Install Ollama
+
+Copy and paste this one line:
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+Wait for it to finish. You'll see "Install complete" when done.
+
+#### Step 5: Configure Ollama for Network Access
+
+By default, Ollama only talks to itself. We need to tell it to accept connections from other computers.
+
+```bash
+# Create a configuration folder
+sudo mkdir -p /etc/systemd/system/ollama.service.d/
+
+# Create the configuration file
+sudo tee /etc/systemd/system/ollama.service.d/override.conf << 'EOF'
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+EOF
+
+# Reload and restart Ollama
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
+**What does this do?** `0.0.0.0:11434` tells Ollama to listen on all network interfaces (not just localhost), so other computers can connect.
+
+#### Step 6: Open the Firewall
+
+```bash
+# If UFW (firewall) is installed, allow Ollama's port
+sudo ufw allow 11434/tcp comment 'Ollama API'
+sudo ufw allow 3456/tcp comment 'Claude Flow Agent'
+
+# If UFW isn't active, that's fine - skip this step
+```
+
+#### Step 7: Download AI Models
+
+Now let's download some AI models. Choose based on your hardware:
+
+**For CPU-only or low VRAM (< 4GB):**
+```bash
+ollama pull qwen2.5:0.5b
+ollama pull phi3:mini
+```
+
+**For 8GB VRAM:**
+```bash
+ollama pull qwen2.5:7b
+ollama pull llama3.2:3b
+```
+
+**For 12GB VRAM:**
+```bash
+ollama pull qwen2.5:14b
+ollama pull codestral:22b
+```
+
+**For 24GB+ VRAM:**
+```bash
+ollama pull qwen2.5:32b
+ollama pull deepseek-coder:33b
+```
+
+💡 **Tip:** You can run `ollama list` to see what models you have installed.
+
+#### Step 8: Test Ollama is Working
+
+```bash
+# Test locally first
+ollama run qwen2.5:0.5b "Say hello"
+
+# Test it's accessible on the network
+curl http://localhost:11434/api/tags
+```
+
+You should see a list of your models in JSON format.
+
+#### Step 9: Find Your Machine's IP Address
+
+```bash
+hostname -I | awk '{print $1}'
+```
+
+Write this down! It will look like `192.168.1.101`. You'll need it to connect from your main computer.
+
+#### Step 10: Install the Claude Flow Agent (Optional but Recommended)
+
+The agent provides better integration, health reporting, and auto-discovery:
+
+```bash
+# Install Node.js if you don't have it
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Install the claude-flow agent
+sudo npm install -g @claude-flow/agent
+
+# Create configuration
+mkdir -p ~/.claude-flow
+cat > ~/.claude-flow/agent.json << EOF
+{
+  "agent": {
+    "id": "$(hostname)-agent",
+    "host": "0.0.0.0",
+    "port": 3456,
+    "advertise": "$(hostname -I | awk '{print $1}')"
+  },
+  "ollama": {
+    "host": "http://localhost:11434"
+  },
+  "models": ["qwen2.5:7b"],
+  "discovery": {
+    "enabled": true,
+    "method": "mdns"
+  }
+}
+EOF
+
+echo "Configuration saved to ~/.claude-flow/agent.json"
+```
+
+#### Step 11: Set Up Auto-Start (So It Runs After Reboot)
+
+```bash
+# Create a service file
+sudo tee /etc/systemd/system/claude-flow-agent.service << EOF
+[Unit]
+Description=Claude Flow Agent
+After=network.target ollama.service
+
+[Service]
+Type=simple
+User=$USER
+ExecStart=$(which npx) @claude-flow/agent start
+Restart=always
+RestartSec=10
+Environment=HOME=$HOME
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start the service
+sudo systemctl daemon-reload
+sudo systemctl enable claude-flow-agent
+sudo systemctl start claude-flow-agent
+
+# Check it's running
+sudo systemctl status claude-flow-agent
+```
+
+#### Step 12: Verify Everything Works
+
+From another computer on your network:
+
+```bash
+# Replace 192.168.1.101 with your worker's IP
+curl http://192.168.1.101:11434/api/tags
+```
+
+You should see the list of models. If it works, your worker is ready! 🎉
+
+### G.4 Setting Up Your Main Computer (Coordinator)
+
+On your main workstation where you run Claude Code:
+
+#### Option A: Auto-Discovery (Easiest)
+
+If all machines are on the same network, claude-flow can find them automatically:
+
+```bash
+# Discover all agents
+npx claude-flow@v3 network discover
+
+# You should see something like:
+# Found 3 agents:
+#   laptop-ubuntu (192.168.1.101) - qwen2.5:7b [RTX 3080, 12GB]
+#   desktop-pc (192.168.1.102) - qwen2.5:32b [RTX 4090, 24GB]
+#   old-laptop (192.168.1.103) - qwen2.5:0.5b [CPU, 8GB RAM]
+```
+
+#### Option B: Manual Configuration
+
+If auto-discovery doesn't work (corporate networks, VLANs), add them manually:
+
+```bash
+# Add each worker
+npx claude-flow@v3 network add-host 192.168.1.101 --name laptop-worker
+npx claude-flow@v3 network add-host 192.168.1.102 --name desktop-worker
+
+# Or edit the config file directly
+```
+
+Add to your `claude-flow.config.json`:
+
+```json
+{
+  "network": {
+    "enabled": true,
+    "discovery": {
+      "method": "static",
+      "hosts": [
+        { "name": "laptop-worker", "host": "192.168.1.101", "port": 11434 },
+        { "name": "desktop-worker", "host": "192.168.1.102", "port": 11434 },
+        { "name": "server-worker", "host": "192.168.1.103", "port": 11434 }
+      ]
+    }
+  }
+}
+```
+
+### G.5 Using Your Network Swarm
+
+Now you can use your distributed swarm:
+
+```bash
+# Spawn a coder agent that runs on your desktop's RTX 4090
+npx claude-flow@v3 agent spawn -t coder --model qwen2.5:32b --node desktop-worker
+
+# Or let the system auto-select the best node
+npx claude-flow@v3 agent spawn -t researcher --model qwen2.5:14b --prefer-network
+
+# Initialize a full swarm using network resources
+npx claude-flow@v3 swarm init --topology hierarchical \
+  --queen anthropic:claude-opus-4-5 \
+  --workers network:qwen2.5:32b,network:qwen2.5:7b,network:llama3.2:3b
+```
+
+### G.6 Troubleshooting Common Issues
+
+#### "Connection refused" when connecting to worker
+
+**Problem:** Your main computer can't reach the worker.
+
+**Solutions:**
+1. Check the worker's IP: `hostname -I`
+2. Make sure Ollama is running: `sudo systemctl status ollama`
+3. Check firewall: `sudo ufw status` - port 11434 should be allowed
+4. Test locally first: `curl http://localhost:11434/api/tags` on the worker
+
+#### "No models found" on worker
+
+**Problem:** Ollama is running but has no models.
+
+**Solution:**
+```bash
+# On the worker, download a model
+ollama pull qwen2.5:7b
+
+# Verify it's there
+ollama list
+```
+
+#### Worker is slow or unresponsive
+
+**Problem:** The worker takes forever to respond.
+
+**Solutions:**
+1. Check CPU/GPU usage: `htop` or `nvidia-smi`
+2. You might be running a model too large for your hardware
+3. Try a smaller model: `ollama pull qwen2.5:3b`
+4. Use ethernet instead of WiFi for better network performance
+
+#### "Out of memory" errors
+
+**Problem:** Model is too big for your VRAM/RAM.
+
+**Solutions:**
+1. Use a smaller model
+2. Close other GPU-using applications
+3. For NVIDIA: Check usage with `nvidia-smi`
+4. Restart Ollama: `sudo systemctl restart ollama`
+
+#### Agent not auto-discovered
+
+**Problem:** mDNS discovery doesn't find your agents.
+
+**Solutions:**
+1. Make sure `avahi-daemon` is installed: `sudo apt install avahi-daemon`
+2. Both machines must be on the same network subnet
+3. Some corporate networks block mDNS - use static configuration instead
+4. Check if the agent is advertising: `avahi-browse -a`
+
+### G.7 Quick Reference Card
+
+**On Each Worker:**
+```bash
+# Start Ollama
+sudo systemctl start ollama
+
+# Check Ollama status
+sudo systemctl status ollama
+
+# View available models
+ollama list
+
+# Download a new model
+ollama pull <model-name>
+
+# Check your IP address
+hostname -I
+
+# View agent logs
+journalctl -u claude-flow-agent -f
+```
+
+**On Your Main Computer:**
+```bash
+# Discover network agents
+npx claude-flow@v3 network discover
+
+# Check agent health
+npx claude-flow@v3 network health
+
+# Spawn agent on specific node
+npx claude-flow@v3 agent spawn -t coder --node <worker-name>
+
+# View network topology
+npx claude-flow@v3 network topology
+```
+
+### G.8 One-Line Setup Script
+
+For experienced users, here's a complete setup script you can run on each Ubuntu worker:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/your-repo/claude-flow/main/scripts/setup-worker.sh | bash
+```
+
+Or manually:
+
+```bash
+#!/bin/bash
+# Claude Flow Worker Setup Script
+# Run on each Ubuntu machine you want to add to your swarm
+
+set -e
+
+echo "🤖 Claude Flow Worker Setup"
+echo "=========================="
+
+# Colors for output
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Step 1: Install Ollama
+echo -e "\n${GREEN}[1/6]${NC} Installing Ollama..."
+if ! command -v ollama &> /dev/null; then
+    curl -fsSL https://ollama.com/install.sh | sh
+else
+    echo "Ollama already installed"
+fi
+
+# Step 2: Configure for network
+echo -e "\n${GREEN}[2/6]${NC} Configuring network access..."
+sudo mkdir -p /etc/systemd/system/ollama.service.d/
+sudo tee /etc/systemd/system/ollama.service.d/override.conf > /dev/null << 'CONF'
+[Service]
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+CONF
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+
+# Step 3: Firewall
+echo -e "\n${GREEN}[3/6]${NC} Configuring firewall..."
+if command -v ufw &> /dev/null; then
+    sudo ufw allow 11434/tcp comment 'Ollama' 2>/dev/null || true
+    sudo ufw allow 3456/tcp comment 'Claude Flow Agent' 2>/dev/null || true
+fi
+
+# Step 4: Detect GPU and pull appropriate model
+echo -e "\n${GREEN}[4/6]${NC} Detecting hardware and pulling models..."
+if command -v nvidia-smi &> /dev/null; then
+    VRAM=$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1)
+    echo "Detected NVIDIA GPU with ${VRAM}MB VRAM"
+    if [ "$VRAM" -ge 20000 ]; then
+        ollama pull qwen2.5:32b
+    elif [ "$VRAM" -ge 10000 ]; then
+        ollama pull qwen2.5:14b
+    else
+        ollama pull qwen2.5:7b
+    fi
+else
+    echo "No NVIDIA GPU detected, using CPU-friendly model"
+    ollama pull qwen2.5:3b
+fi
+
+# Step 5: Install Node.js and agent
+echo -e "\n${GREEN}[5/6]${NC} Installing Claude Flow agent..."
+if ! command -v node &> /dev/null; then
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt install -y nodejs
+fi
+sudo npm install -g @claude-flow/agent
+
+# Step 6: Configure and start agent
+echo -e "\n${GREEN}[6/6]${NC} Starting agent service..."
+MY_IP=$(hostname -I | awk '{print $1}')
+mkdir -p ~/.claude-flow
+cat > ~/.claude-flow/agent.json << AGENTCONF
+{
+  "agent": {
+    "id": "$(hostname)-agent",
+    "host": "0.0.0.0",
+    "port": 3456,
+    "advertise": "$MY_IP"
+  },
+  "ollama": { "host": "http://localhost:11434" },
+  "discovery": { "enabled": true, "method": "mdns" }
+}
+AGENTCONF
+
+# Create and start service
+sudo tee /etc/systemd/system/claude-flow-agent.service > /dev/null << SVCCONF
+[Unit]
+Description=Claude Flow Agent
+After=network.target ollama.service
+[Service]
+Type=simple
+User=$USER
+ExecStart=$(which npx) @claude-flow/agent start
+Restart=always
+RestartSec=10
+Environment=HOME=$HOME
+[Install]
+WantedBy=multi-user.target
+SVCCONF
+
+sudo systemctl daemon-reload
+sudo systemctl enable claude-flow-agent
+sudo systemctl start claude-flow-agent
+
+# Done!
+echo ""
+echo "=================================="
+echo -e "${GREEN}✅ Setup complete!${NC}"
+echo ""
+echo "Your worker is available at: $MY_IP"
+echo "Ollama API: http://$MY_IP:11434"
+echo "Agent API:  http://$MY_IP:3456"
+echo ""
+echo "Models installed:"
+ollama list
+echo ""
+echo -e "${YELLOW}Next step:${NC} On your main computer, run:"
+echo "  npx claude-flow@v3 network discover"
+echo "=================================="
+```
+
+Save this as `setup-worker.sh`, make it executable (`chmod +x setup-worker.sh`), and run it on each Ubuntu machine.
+
+---
+
 ## Conclusion
 
-This plan extends claude-flow to support local LLMs and multi-cloud providers as first-class swarm participants with four key innovations:
+This plan extends claude-flow to support local LLMs, multi-cloud providers, and **networked distributed agents** as first-class swarm participants with five key innovations:
 
 1. **AISP Protocol**: Eliminates communication ambiguity through mathematical notation
 2. **C2C Integration**: Enables direct semantic transfer between local models
 3. **ADOL + Compression**: Reduces token overhead by 60-90%
 4. **Gemini-3-Pro Integration**: High-capacity cloud fallback with 2M daily tokens and no rate windows
+5. **Networked Local Agents**: Distributed swarm across LAN devices with auto-discovery and load balancing
 
 The result is a hybrid swarm architecture that can:
 - Run offline with full local models
 - Mix cloud intelligence (Claude + Gemini) with local execution
+- **Distribute workloads across multiple machines on your network**
+- **Leverage heterogeneous hardware (GPUs, CPUs, different VRAM sizes)**
 - Seamlessly fallback when rate-limited (Anthropic → Gemini → Local)
 - Handle large-context tasks with Gemini's 1M+ context window
 - Operate continuously without 5-hour window interruptions
 - Communicate with minimal token overhead
 - Maintain semantic precision across heterogeneous models
+- **Auto-discover and coordinate agents via mDNS/Bonjour**
 
 **Expected Outcomes:**
 - 80-87% cost reduction with local workers
@@ -1455,10 +2293,15 @@ The result is a hybrid swarm architecture that can:
 - <2% ambiguity rate (vs 40-65% natural language)
 - 2M tokens/day additional capacity via Gemini-3-Pro
 - Zero downtime from rate limiting (multi-cloud fallback)
+- **Utilize idle hardware (laptops, desktops, servers) as swarm workers**
+- **Scale horizontally by adding more network nodes**
 
 ---
 
-*Document Version: 1.1.0*
+*Document Version: 1.2.0*
 *Last Updated: 2026-02-01*
 *Author: Claude Code + Swarm Research*
-*Revision: Added Gemini-3-Pro integration (2M tokens/day, no rate windows)*
+*Revisions:*
+- *1.0.0: Initial local agent swarm integration plan*
+- *1.1.0: Added Gemini-3-Pro integration (2M tokens/day, no rate windows)*
+- *1.2.0: Added networked local agents with LAN distribution and ELI5 Ubuntu setup guide*
