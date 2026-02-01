@@ -585,6 +585,395 @@ npx claude-flow@v3 network add-host 192.168.1.105 --port 11434
 npx claude-flow@v3 network ping-all
 ```
 
+#### 2.1.7 Persistence Integration for Networked Agents
+
+Networked agents leverage claude-flow's **existing persistence infrastructure** (`@claude-flow/memory` and `@claude-flow/swarm`) with network-aware extensions.
+
+**Existing V3 Persistence Systems:**
+
+| Package | Component | Purpose |
+|---------|-----------|---------|
+| `@claude-flow/memory` | **Hybrid Backend** (ADR-009) | SQLite + AgentDB combined storage |
+| `@claude-flow/memory` | **HNSW Index** | 150x-12,500x faster vector search |
+| `@claude-flow/memory` | **Cache Manager** | LRU cache with TTL, O(1) operations |
+| `@claude-flow/memory` | **SQL.js Backend** | Cross-platform WASM SQLite fallback |
+| `@claude-flow/swarm` | **Agent Registry** | Agent state and lifecycle tracking |
+| `@claude-flow/swarm` | **Task Orchestrator** | Task state, assignments, dependencies |
+| `@claude-flow/swarm` | **Consensus Engines** | Raft, Gossip, Byzantine fault tolerance |
+
+**How Networked Agents Extend Existing Systems:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         COORDINATOR NODE                                     │
+│                    (Primary Persistence Authority)                           │
+│                                                                              │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐             │
+│  │  Hybrid Backend │  │  Agent Registry │  │ Task Orchestrator│             │
+│  │  (SQLite+HNSW)  │  │   (Extended)    │  │   (Extended)     │             │
+│  │                 │  │                 │  │                  │             │
+│  │ • Memory entries│  │ • Local agents  │  │ • Task state     │             │
+│  │ • Embeddings    │  │ • Network agents│  │ • Assignments    │             │
+│  │ • Sessions      │  │ • Health status │  │ • Dependencies   │             │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬─────────┘             │
+│           │                    │                    │                        │
+│           └────────────────────┴────────────────────┘                        │
+│                                │                                             │
+│                    ┌───────────┴───────────┐                                │
+│                    │   Sync Manager        │                                │
+│                    │   (New Component)     │                                │
+│                    │                       │                                │
+│                    │ • Delta replication   │                                │
+│                    │ • Conflict resolution │                                │
+│                    │ • Partition handling  │                                │
+│                    └───────────┬───────────┘                                │
+└────────────────────────────────┼────────────────────────────────────────────┘
+                                 │
+                    Network (LAN/mDNS)
+                                 │
+        ┌────────────────────────┼────────────────────────┐
+        │                        │                        │
+        ▼                        ▼                        ▼
+┌───────────────┐        ┌───────────────┐        ┌───────────────┐
+│  WORKER NODE  │        │  WORKER NODE  │        │  WORKER NODE  │
+│               │        │               │        │               │
+│ ┌───────────┐ │        │ ┌───────────┐ │        │ ┌───────────┐ │
+│ │Local Cache│ │        │ │Local Cache│ │        │ │Local Cache│ │
+│ │(Read-only │ │        │ │(Read-only │ │        │ │(Read-only │ │
+│ │ replicas) │ │        │ │ replicas) │ │        │ │ replicas) │ │
+│ └───────────┘ │        │ └───────────┘ │        │ └───────────┘ │
+│               │        │               │        │               │
+│ Ollama + LLM  │        │ Ollama + LLM  │        │ Ollama + LLM  │
+└───────────────┘        └───────────────┘        └───────────────┘
+```
+
+**1. Extended Agent Registry (Network-Aware):**
+
+```typescript
+// v3/@claude-flow/network/src/network-agent-registry.ts
+import { AgentRegistry } from '@claude-flow/swarm';
+
+export class NetworkAgentRegistry extends AgentRegistry {
+  // Extends existing AgentRegistry with network fields
+
+  async registerNetworkAgent(agent: NetworkAgentInfo): Promise<void> {
+    // Store in existing registry with network metadata
+    await super.register({
+      id: agent.id,
+      type: agent.type,
+      status: 'available',
+      metadata: {
+        // Network-specific fields
+        host: agent.host,
+        port: agent.port,
+        isRemote: true,
+        discoveryMethod: agent.discoveryMethod, // 'mdns' | 'static' | 'registry'
+        hardware: {
+          gpu: agent.gpu,
+          vramGB: agent.vramGB,
+          cpuCores: agent.cpuCores,
+          ramGB: agent.ramGB
+        },
+        models: agent.models,
+        lastHealthCheck: Date.now(),
+        latencyMs: agent.latencyMs
+      }
+    });
+  }
+
+  async getNetworkAgents(): Promise<NetworkAgentInfo[]> {
+    const all = await super.list();
+    return all.filter(a => a.metadata?.isRemote === true);
+  }
+
+  async updateHealth(agentId: string, health: HealthStatus): Promise<void> {
+    await super.update(agentId, {
+      status: health.healthy ? 'available' : 'degraded',
+      metadata: {
+        lastHealthCheck: Date.now(),
+        latencyMs: health.latencyMs,
+        load: health.load,
+        errorCount: health.errorCount
+      }
+    });
+  }
+}
+```
+
+**2. Distributed Memory with Sync Manager:**
+
+```typescript
+// v3/@claude-flow/network/src/sync-manager.ts
+import { HybridBackend } from '@claude-flow/memory';
+
+export class SyncManager {
+  private backend: HybridBackend;
+  private syncInterval: number = 5000; // 5 seconds
+  private pendingWrites: Map<string, MemoryEntry> = new Map();
+
+  constructor(backend: HybridBackend) {
+    this.backend = backend;
+  }
+
+  /**
+   * Replicate memory entries to worker nodes (read-only cache)
+   * Workers get eventual consistency for reads
+   */
+  async replicateToWorkers(
+    entries: MemoryEntry[],
+    workers: NetworkAgent[]
+  ): Promise<ReplicationResult> {
+    const results = await Promise.allSettled(
+      workers.map(worker => this.sendDelta(worker, entries))
+    );
+
+    return {
+      succeeded: results.filter(r => r.status === 'fulfilled').length,
+      failed: results.filter(r => r.status === 'rejected').length
+    };
+  }
+
+  /**
+   * Handle writes from worker nodes
+   * All writes go through coordinator for consistency
+   */
+  async handleWorkerWrite(
+    workerId: string,
+    entry: MemoryEntryInput
+  ): Promise<MemoryEntry> {
+    // Validate worker is authorized
+    await this.validateWorker(workerId);
+
+    // Write to primary (coordinator's HybridBackend)
+    const stored = await this.backend.store(entry);
+
+    // Queue for replication to other workers
+    this.pendingWrites.set(stored.id, stored);
+
+    return stored;
+  }
+
+  /**
+   * Sync strategy based on consistency requirements
+   */
+  async sync(level: ConsistencyLevel): Promise<void> {
+    switch (level) {
+      case 'strong':
+        // Wait for all workers to acknowledge
+        await this.syncAllWorkers({ waitForAck: true });
+        break;
+
+      case 'eventual':
+        // Fire-and-forget, workers catch up eventually
+        this.syncAllWorkers({ waitForAck: false });
+        break;
+
+      case 'session':
+        // Only sync to workers involved in current session
+        await this.syncSessionWorkers();
+        break;
+    }
+  }
+}
+```
+
+**3. Task State Persistence Across Network:**
+
+```typescript
+// v3/@claude-flow/network/src/network-task-orchestrator.ts
+import { TaskOrchestrator } from '@claude-flow/swarm';
+
+export class NetworkTaskOrchestrator extends TaskOrchestrator {
+  /**
+   * Assign task to network agent with state tracking
+   */
+  async assignToNetworkAgent(
+    taskId: string,
+    agentId: string,
+    node: NetworkAgent
+  ): Promise<void> {
+    // Use existing TaskOrchestrator with network metadata
+    await super.assign(taskId, agentId, {
+      assignedNode: node.host,
+      assignedAt: Date.now(),
+      checkpointInterval: 30000 // Checkpoint every 30s for recovery
+    });
+  }
+
+  /**
+   * Checkpoint task state for recovery
+   * If worker dies, coordinator can reassign
+   */
+  async checkpoint(taskId: string, state: TaskCheckpoint): Promise<void> {
+    await super.updateState(taskId, {
+      lastCheckpoint: Date.now(),
+      checkpointData: state,
+      progress: state.progress
+    });
+  }
+
+  /**
+   * Recover task after worker failure
+   */
+  async recoverTask(taskId: string): Promise<TaskRecovery> {
+    const task = await super.get(taskId);
+
+    if (!task.checkpointData) {
+      return { action: 'restart', fromBeginning: true };
+    }
+
+    // Find new worker with same capabilities
+    const newWorker = await this.findCapableWorker(task);
+
+    return {
+      action: 'resume',
+      fromCheckpoint: task.checkpointData,
+      newWorker
+    };
+  }
+}
+```
+
+**4. Network Partition Handling:**
+
+```typescript
+// v3/@claude-flow/network/src/partition-handler.ts
+export class PartitionHandler {
+  /**
+   * Detect network partition (workers become unreachable)
+   */
+  async detectPartition(): Promise<PartitionInfo | null> {
+    const agents = await this.registry.getNetworkAgents();
+    const unreachable = agents.filter(a =>
+      Date.now() - a.metadata.lastHealthCheck > 30000
+    );
+
+    if (unreachable.length === 0) return null;
+
+    return {
+      partitioned: unreachable.map(a => a.id),
+      reachable: agents.filter(a => !unreachable.includes(a)).map(a => a.id),
+      detectedAt: Date.now()
+    };
+  }
+
+  /**
+   * Handle partition: reassign tasks, mark agents degraded
+   */
+  async handlePartition(partition: PartitionInfo): Promise<void> {
+    // Mark partitioned agents as degraded
+    for (const agentId of partition.partitioned) {
+      await this.registry.updateHealth(agentId, {
+        healthy: false,
+        reason: 'network-partition'
+      });
+    }
+
+    // Reassign their tasks to reachable workers
+    const orphanedTasks = await this.orchestrator.getTasksByAgents(
+      partition.partitioned
+    );
+
+    for (const task of orphanedTasks) {
+      await this.orchestrator.recoverTask(task.id);
+    }
+  }
+
+  /**
+   * Reconcile when partition heals
+   */
+  async reconcile(healedAgents: string[]): Promise<void> {
+    for (const agentId of healedAgents) {
+      // Re-sync state from coordinator
+      const agent = await this.registry.get(agentId);
+      await this.syncManager.fullSync(agent);
+
+      // Mark as available again
+      await this.registry.updateHealth(agentId, { healthy: true });
+    }
+  }
+}
+```
+
+**5. Configuration for Network Persistence:**
+
+```json
+{
+  "persistence": {
+    "backend": "hybrid",
+    "sqlite": {
+      "path": "./data/claude-flow.db",
+      "walMode": true,
+      "maxEntries": 1000000
+    },
+    "hnsw": {
+      "dimensions": 1536,
+      "m": 16,
+      "efConstruction": 200
+    },
+    "cache": {
+      "enabled": true,
+      "maxSize": 10000,
+      "ttlMs": 300000
+    }
+  },
+  "network": {
+    "sync": {
+      "enabled": true,
+      "intervalMs": 5000,
+      "consistencyLevel": "eventual",
+      "replicationFactor": 2
+    },
+    "recovery": {
+      "checkpointIntervalMs": 30000,
+      "maxCheckpointsPerTask": 10,
+      "partitionTimeoutMs": 30000
+    }
+  }
+}
+```
+
+**6. CLI Commands for Persistence Management:**
+
+```bash
+# View persistence status
+npx claude-flow@v3 memory status
+# Output:
+# Backend: hybrid (SQLite + AgentDB)
+# Entries: 45,231
+# Cache hit rate: 94.2%
+# HNSW index: 12,450 vectors
+# Last sync: 3s ago
+
+# Force sync to all workers
+npx claude-flow@v3 network sync --all
+
+# View replication status
+npx claude-flow@v3 network replication status
+# Output:
+# laptop-1: ✅ synced (lag: 0s)
+# desktop-2: ✅ synced (lag: 0s)
+# server-3: ⚠️ behind (lag: 12s, catching up...)
+
+# Export memory for backup
+npx claude-flow@v3 memory export --format sqlite --output backup.db
+
+# Recover from partition
+npx claude-flow@v3 network recover --agent laptop-1
+```
+
+**Persistence Flow Summary:**
+
+| Operation | Where It Happens | Consistency |
+|-----------|------------------|-------------|
+| **Memory writes** | Coordinator only | Strong |
+| **Memory reads** | Any node (cached) | Eventual |
+| **Task assignment** | Coordinator | Strong |
+| **Task checkpoints** | Worker → Coordinator | Eventual |
+| **Agent registration** | Coordinator | Strong |
+| **Health updates** | Worker → Coordinator | Eventual |
+| **Vector search** | Coordinator (HNSW) | Strong |
+
 ### 2.2 Provider Selection Algorithm
 
 ```typescript
@@ -2266,13 +2655,14 @@ Save this as `setup-worker.sh`, make it executable (`chmod +x setup-worker.sh`),
 
 ## Conclusion
 
-This plan extends claude-flow to support local LLMs, multi-cloud providers, and **networked distributed agents** as first-class swarm participants with five key innovations:
+This plan extends claude-flow to support local LLMs, multi-cloud providers, and **networked distributed agents** as first-class swarm participants with six key innovations:
 
 1. **AISP Protocol**: Eliminates communication ambiguity through mathematical notation
 2. **C2C Integration**: Enables direct semantic transfer between local models
 3. **ADOL + Compression**: Reduces token overhead by 60-90%
 4. **Gemini-3-Pro Integration**: High-capacity cloud fallback with 2M daily tokens and no rate windows
 5. **Networked Local Agents**: Distributed swarm across LAN devices with auto-discovery and load balancing
+6. **Integrated Persistence**: Leverages existing V3 infrastructure (Hybrid Backend, HNSW, Agent Registry) with network-aware extensions for distributed state management
 
 The result is a hybrid swarm architecture that can:
 - Run offline with full local models
@@ -2298,10 +2688,11 @@ The result is a hybrid swarm architecture that can:
 
 ---
 
-*Document Version: 1.2.0*
+*Document Version: 1.3.0*
 *Last Updated: 2026-02-01*
 *Author: Claude Code + Swarm Research*
 *Revisions:*
 - *1.0.0: Initial local agent swarm integration plan*
 - *1.1.0: Added Gemini-3-Pro integration (2M tokens/day, no rate windows)*
 - *1.2.0: Added networked local agents with LAN distribution and ELI5 Ubuntu setup guide*
+- *1.3.0: Added persistence integration leveraging existing V3 infrastructure (Hybrid Backend, HNSW, Agent Registry, Task Orchestrator) with network-aware sync and partition handling*
