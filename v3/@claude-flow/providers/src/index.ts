@@ -36,5 +36,8 @@ export { CohereProvider } from './cohere-provider.js';
 export { OllamaProvider } from './ollama-provider.js';
 export { RuVectorProvider } from './ruvector-provider.js';
 
+// Export Ollama types
+export type { OllamaConfig, OllamaModelInfo, OllamaListResponse, OllamaEmbeddingResponse, OllamaPullProgress } from './ollama-types.js';
+
 // Export provider manager
 export { ProviderManager, createProviderManager } from './provider-manager.js';

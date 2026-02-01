@@ -405,4 +405,77 @@ export class OllamaProvider extends BaseProvider {
       errorData
     );
   }
+
+  // ===== WP01 CONVENIENCE METHODS =====
+
+  /**
+   * Generate text from a prompt (convenience method for simple completion)
+   */
+  async generate(prompt: string, options?: { maxTokens?: number; temperature?: number }): Promise<LLMResponse> {
+    return this.complete({
+      messages: [{ role: 'user', content: prompt }],
+      maxTokens: options?.maxTokens,
+      temperature: options?.temperature,
+    });
+  }
+
+  /**
+   * Chat with the model (convenience method wrapping complete)
+   */
+  async chat(messages: LLMRequest['messages'], options?: Omit<LLMRequest, 'messages'>): Promise<LLMResponse> {
+    return this.complete({
+      messages,
+      ...options,
+    });
+  }
+
+  /**
+   * Generate embeddings for text via Ollama's /api/embeddings endpoint
+   */
+  async embed(text: string | string[]): Promise<number[] | number[][]> {
+    const texts = Array.isArray(text) ? text : [text];
+    const embeddings: number[][] = [];
+
+    for (const t of texts) {
+      const response = await fetch(`${this.baseUrl}/api/embeddings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: this.config.model,
+          prompt: t,
+        }),
+      });
+
+      if (!response.ok) {
+        await this.handleErrorResponse(response);
+      }
+
+      const data = (await response.json()) as { embedding: number[] };
+      embeddings.push(data.embedding);
+    }
+
+    return Array.isArray(text) ? embeddings : embeddings[0];
+  }
+
+  /**
+   * Pull a model from the Ollama library
+   */
+  async pullModel(name: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/api/pull`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, stream: false }),
+    });
+
+    if (!response.ok) {
+      await this.handleErrorResponse(response);
+    }
+  }
+
+  /**
+   * Public health check method (alias for healthCheck)
+   */
+  async checkHealth(): Promise<HealthCheckResult> {
+    return this.healthCheck();
+  }
 }
