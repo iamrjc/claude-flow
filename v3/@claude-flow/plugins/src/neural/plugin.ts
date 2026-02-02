@@ -25,7 +25,6 @@ import { AttentionManager, createAttentionManager } from './attention.js';
 
 import type {
   NeuralPluginConfig,
-  DEFAULT_NEURAL_PLUGIN_CONFIG,
   LearningAlgorithm,
   ExperienceBuffer,
   SONAControlParams,
@@ -34,6 +33,7 @@ import type {
   LearningParams,
   NeuralPluginState,
 } from './types.js';
+import { DEFAULT_NEURAL_PLUGIN_CONFIG } from './types.js';
 
 /**
  * Neural Plugin
@@ -190,14 +190,22 @@ export class NeuralPlugin implements IPlugin {
       }
     }
 
+    const healthy = issues.length === 0;
     return {
-      healthy: issues.length === 0,
-      timestamp: Date.now(),
-      details: {
-        issues,
-        state: this._state,
-        uptime: Date.now() - this.startTime,
+      healthy,
+      status: healthy ? 'healthy' : 'unhealthy',
+      message: issues.length > 0 ? issues.join('; ') : undefined,
+      checks: {
+        sona: {
+          healthy: this.sona !== null,
+          message: this.sona ? 'SONA initialized' : 'SONA not initialized',
+        },
+        reasoningBank: {
+          healthy: !this.config.enableReasoningBank || this.reasoningBank !== null,
+          message: this.reasoningBank ? 'ReasoningBank initialized' : 'ReasoningBank not initialized',
+        },
       },
+      timestamp: new Date(),
     };
   }
 
@@ -339,7 +347,8 @@ export class NeuralPlugin implements IPlugin {
   // MCP Tool Handlers
   // ==========================================================================
 
-  private async handleSONAControl(params: SONAControlParams): Promise<any> {
+  private async handleSONAControl(input: Record<string, unknown>): Promise<any> {
+    const params = input as unknown as SONAControlParams;
     if (!this.sona) throw new Error('SONA not initialized');
 
     switch (params.action) {
@@ -365,7 +374,8 @@ export class NeuralPlugin implements IPlugin {
     }
   }
 
-  private async handleReasoningBank(params: ReasoningBankParams): Promise<any> {
+  private async handleReasoningBank(input: Record<string, unknown>): Promise<any> {
+    const params = input as unknown as ReasoningBankParams;
     if (!this.reasoningBank) throw new Error('ReasoningBank not initialized');
 
     switch (params.action) {
@@ -381,7 +391,8 @@ export class NeuralPlugin implements IPlugin {
     }
   }
 
-  private async handlePatternRecognition(params: PatternRecognitionParams): Promise<any> {
+  private async handlePatternRecognition(input: Record<string, unknown>): Promise<any> {
+    const params = input as unknown as PatternRecognitionParams;
     if (!this.patternRecognizer) throw new Error('PatternRecognizer not initialized');
 
     switch (params.action) {
@@ -395,7 +406,8 @@ export class NeuralPlugin implements IPlugin {
     }
   }
 
-  private async handleLearning(params: LearningParams): Promise<any> {
+  private async handleLearning(input: Record<string, unknown>): Promise<any> {
+    const params = input as unknown as LearningParams;
     if (!this.learningAlgorithm) throw new Error('Learning algorithm not initialized');
 
     switch (params.action) {

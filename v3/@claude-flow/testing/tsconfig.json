@@ -10,7 +10,11 @@
   "include": ["src/**/*"],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "src/e2e/**",
+    "src/benchmarks/**"
   ],
   "references": [
     { "path": "../shared" },

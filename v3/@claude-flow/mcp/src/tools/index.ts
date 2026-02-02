@@ -4,6 +4,8 @@
  * Exports all MCP tools for agent, task, memory, coordination, and swarm management
  */
 
+import type { MCPTool } from '../types.js';
+
 // Tool definitions
 export * from './agent-tools.js';
 export * from './task-tools.js';
@@ -27,30 +29,30 @@ import { swarmTools } from './swarm-tools.js';
 /**
  * All available MCP tools
  */
-export const allMCPTools = [
+export const allMCPTools: MCPTool[] = [
   ...agentTools,
   ...taskTools,
   ...memoryTools,
   ...coordinationTools,
   ...swarmTools,
-];
+] as MCPTool[];
 
 /**
  * Tool categories for organization
  */
-export const toolCategories = {
-  agent: agentTools,
-  task: taskTools,
-  memory: memoryTools,
-  coordination: coordinationTools,
-  swarm: swarmTools,
+export const toolCategories: Record<string, MCPTool[]> = {
+  agent: agentTools as MCPTool[],
+  task: taskTools as MCPTool[],
+  memory: memoryTools as MCPTool[],
+  coordination: coordinationTools as MCPTool[],
+  swarm: swarmTools as MCPTool[],
 };
 
 /**
  * Get tools by category
  */
-export function getToolsByCategory(category: string) {
-  return toolCategories[category as keyof typeof toolCategories] ?? [];
+export function getToolsByCategory(category: string): MCPTool[] {
+  return toolCategories[category] ?? [];
 }
 
 /**

@@ -138,7 +138,7 @@ export class SessionMigrator {
 
     // Transform state
     const state = {
-      ...v2Session.state,
+      ...(v2Session.state as Record<string, unknown> ?? {}),
       v3Migrated: true,
       migratedAt: Date.now(),
     };

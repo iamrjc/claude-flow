@@ -8,7 +8,8 @@ import { output } from '../../output.js';
 /**
  * Format status with color
  */
-export function formatStatus(status: string): string {
+export function formatStatus(value: unknown): string {
+  const status = String(value);
   const s = status.toLowerCase();
   switch (s) {
     case 'active':
@@ -34,7 +35,8 @@ export function formatStatus(status: string): string {
 /**
  * Format priority with color
  */
-export function formatPriority(priority: string): string {
+export function formatPriority(value: unknown): string {
+  const priority = String(value);
   switch (priority.toLowerCase()) {
     case 'critical':
       return output.error(priority);

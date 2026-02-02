@@ -612,7 +612,7 @@ export class ProviderManager extends EventEmitter {
           });
         }
       } catch (error) {
-        this.logger.warn(`Failed to estimate cost for ${provider.name}`, error);
+        this.logger.warn(`Failed to estimate cost for ${provider.name}`, { error });
       }
     }
 

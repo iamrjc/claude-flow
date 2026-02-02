@@ -396,12 +396,13 @@ export class KnowledgeAggregator extends EventEmitter {
     // Aggregate data (simple merge for objects, majority vote for primitives)
     let aggregated: unknown;
 
-    if (insights.every(i => typeof i.data === 'object')) {
+    if (insights.every(i => typeof i.data === 'object' && i.data !== null)) {
       // Merge objects
-      aggregated = {};
+      let merged: Record<string, unknown> = {};
       for (const insight of insights) {
-        aggregated = { ...aggregated, ...insight.data as any };
+        merged = { ...merged, ...(insight.data as Record<string, unknown>) };
       }
+      aggregated = merged;
     } else {
       // Majority vote for primitives
       const counts = new Map<unknown, number>();

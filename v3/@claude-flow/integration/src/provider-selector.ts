@@ -361,15 +361,16 @@ export class ProviderSelector {
 }
 
 // Re-export types and utilities
-export {
+export type {
   TaskContext,
   RoutingPreferences,
   ProviderSelection,
   ProviderType,
   ProviderHealth,
   ProviderSelectionConfig,
-  DEFAULT_PROVIDER_SELECTION_CONFIG,
 } from './types/routing.js';
+
+export { DEFAULT_PROVIDER_SELECTION_CONFIG } from './types/routing.js';
 
 export { detectAgentBoosterIntent, AgentBoosterDetector } from './agent-booster-detector.js';
 export { analyzeComplexity, ComplexityAnalyzer } from './complexity-analyzer.js';

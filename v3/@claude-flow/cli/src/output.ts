@@ -142,6 +142,22 @@ export class OutputFormatter {
     return this.color(text, 'cyan', 'bold');
   }
 
+  cyan(text: string): string {
+    return this.color(text, 'cyan');
+  }
+
+  green(text: string): string {
+    return this.color(text, 'green');
+  }
+
+  yellow(text: string): string {
+    return this.color(text, 'yellow');
+  }
+
+  blue(text: string): string {
+    return this.color(text, 'blue');
+  }
+
   // ============================================
   // Output Methods
   // ============================================

@@ -229,10 +229,12 @@ export * from './regression/index.js';
 export * from './v2-compat/index.js';
 
 // E2E Integration Testing - End-to-end system tests
-export * from './e2e/index.js';
+// Excluded from build - run separately with vitest
+// export * from './e2e/index.js';
 
 // Performance Benchmarking Suite - 30+ benchmarks with statistical analysis
-export * from './benchmarks/index.js';
+// Excluded from build - run separately
+// export * from './benchmarks/index.js';
 
 // Re-export commonly used Vitest utilities
 export { vi, expect, describe, it, test, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';

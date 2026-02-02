@@ -3,11 +3,13 @@
  * Exports all V3 domain-driven commands
  */
 
-export { agentCommands } from './agent-commands.js';
-export { taskCommands } from './task-commands.js';
-export { memoryCommands } from './memory-commands.js';
-export { coordinationCommands, sessionCommands, messageCommands, consensusCommands } from './coordination-commands.js';
-export { swarmCommands } from './swarm-commands.js';
+import { agentCommands } from './agent-commands.js';
+import { taskCommands } from './task-commands.js';
+import { memoryCommands } from './memory-commands.js';
+import { coordinationCommands, sessionCommands, messageCommands, consensusCommands } from './coordination-commands.js';
+import { swarmCommands } from './swarm-commands.js';
+
+export { agentCommands, taskCommands, memoryCommands, coordinationCommands, sessionCommands, messageCommands, consensusCommands, swarmCommands };
 
 // Utilities
 export * from './command-utils.js';

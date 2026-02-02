@@ -191,10 +191,10 @@ export class VectorIndexBuilder {
     return this;
   }
 
-  enableQuantization(type: 'binary' | 'scalar' | 'product', bits?: number): this {
+  enableQuantization(type: 'binary' | 'scalar' | 'product', bits?: 4 | 8 | 16): this {
     this.config.quantization = {
       type,
-      bits: bits || 8,
+      bits: bits ?? 8,
     };
     return this;
   }

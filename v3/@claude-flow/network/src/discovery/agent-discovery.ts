@@ -299,7 +299,7 @@ export class AgentDiscovery extends EventEmitter {
   }
 
   private wireProviderEvents(provider: DiscoveryProvider): void {
-    const emitter = provider as EventEmitter;
+    const emitter = provider as unknown as EventEmitter;
 
     emitter.on('agent-discovered', (agent: NetworkAgent) => {
       this.updateKnownAgent(agent);

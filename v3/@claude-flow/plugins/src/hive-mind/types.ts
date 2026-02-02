@@ -60,7 +60,7 @@ export interface QueenState {
   activeDirectives: Map<string, Directive>;
   lastHeartbeat: Date;
   electionVotes: Map<string, boolean>;
-  consensusProposals: Map<string, ConsensusProposal>;
+  consensusProposals: Map<string, string>;
 }
 
 export interface WorkerInfo {
