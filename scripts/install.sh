@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 #
-# Claude Flow Installer
-# https://github.com/ruvnet/claude-flow
+# Claude Flow V3 Installer
+# https://github.com/iamrjc/claude-flow
 #
 # Usage:
-#   curl -fsSL https://cdn.jsdelivr.net/gh/ruvnet/claude-flow@main/scripts/install.sh | bash
-#   curl -fsSL https://cdn.jsdelivr.net/gh/ruvnet/claude-flow@main/scripts/install.sh | bash -s -- --global
-#   curl -fsSL https://cdn.jsdelivr.net/gh/ruvnet/claude-flow@main/scripts/install.sh | bash -s -- --minimal
+#   curl -fsSL https://cdn.jsdelivr.net/gh/iamrjc/claude-flow@main/scripts/install.sh | bash
+#   curl -fsSL https://cdn.jsdelivr.net/gh/iamrjc/claude-flow@main/scripts/install.sh | bash -s -- --global
+#   curl -fsSL https://cdn.jsdelivr.net/gh/iamrjc/claude-flow@main/scripts/install.sh | bash -s -- --full
 #
 # Options (via arguments):
 #   --global              Global install (npm install -g)
 #   --minimal             Minimal install (no optional deps)
 #   --version=X.X.X       Specific version
+#   --dashboard           Start admin dashboard after install
+#   --swarm               Initialize swarm coordinator after install
 #
 # Options (via environment - requires export):
 #   export CLAUDE_FLOW_VERSION=3.0.0-alpha.183
@@ -38,6 +40,8 @@ GLOBAL="${CLAUDE_FLOW_GLOBAL:-0}"
 SETUP_MCP="${CLAUDE_FLOW_SETUP_MCP:-0}"
 RUN_DOCTOR="${CLAUDE_FLOW_DOCTOR:-0}"
 RUN_INIT="${CLAUDE_FLOW_INIT:-1}"
+START_DASHBOARD="${CLAUDE_FLOW_DASHBOARD:-0}"
+INIT_SWARM="${CLAUDE_FLOW_SWARM:-0}"
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -66,11 +70,21 @@ while [[ $# -gt 0 ]]; do
             RUN_INIT="0"
             shift
             ;;
+        --dashboard)
+            START_DASHBOARD="1"
+            shift
+            ;;
+        --swarm)
+            INIT_SWARM="1"
+            shift
+            ;;
         --full|-f)
             GLOBAL="1"
             SETUP_MCP="1"
             RUN_DOCTOR="1"
             RUN_INIT="1"
+            START_DASHBOARD="1"
+            INIT_SWARM="1"
             shift
             ;;
         --version=*)
@@ -78,7 +92,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help|-h)
-            echo "Claude Flow Installer"
+            echo "Claude Flow V3 Installer"
             echo ""
             echo "Usage: curl -fsSL .../install.sh | bash -s -- [OPTIONS]"
             echo ""
@@ -88,9 +102,20 @@ while [[ $# -gt 0 ]]; do
             echo "  --setup-mcp      Auto-configure MCP server for Claude Code"
             echo "  --doctor, -d     Run diagnostics after install"
             echo "  --no-init        Skip project initialization (enabled by default)"
-            echo "  --full, -f       Full setup (global + mcp + doctor)"
+            echo "  --dashboard      Start admin dashboard after install (port 3000)"
+            echo "  --swarm          Initialize swarm coordinator (hierarchical topology)"
+            echo "  --full, -f       Full setup (global + mcp + doctor + dashboard + swarm)"
             echo "  --version=X.X.X  Install specific version"
             echo "  --help, -h       Show this help"
+            echo ""
+            echo "V3 Features:"
+            echo "  - Multi-provider LLM support (Anthropic, OpenAI, Google, Cohere, Ollama)"
+            echo "  - Real-time WebSocket events & SSE streaming"
+            echo "  - Workflow templates (code-review, research, refactoring, testing, docs)"
+            echo "  - Admin dashboard with live monitoring"
+            echo "  - Multi-layer caching & rate limiting"
+            echo "  - Observability (logging, metrics, tracing)"
+            echo "  - Security hardening (CVE fixes, input validation)"
             exit 0
             ;;
         *)
@@ -113,7 +138,8 @@ spinner() {
 print_banner() {
     echo ""
     echo -e "${CYAN}╔═══════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║${NC}  ${BOLD}🌊 Claude Flow${NC} - Enterprise AI Agent Orchestration    ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}  ${BOLD}🌊 Claude Flow V3${NC} - AI Agent Orchestration Platform   ${CYAN}║${NC}"
+    echo -e "${CYAN}║${NC}  ${DIM}15-agent hierarchical mesh • Multi-provider LLM${NC}       ${CYAN}║${NC}"
     echo -e "${CYAN}╚═══════════════════════════════════════════════════════════╝${NC}"
     echo ""
 }
@@ -213,6 +239,12 @@ show_install_options() {
     else
         print_substep "Profile: ${BOLD}Full${NC} (all features)"
     fi
+    if [ "$INIT_SWARM" = "1" ]; then
+        print_substep "Swarm: ${BOLD}Yes${NC} (hierarchical, 15 agents)"
+    fi
+    if [ "$START_DASHBOARD" = "1" ]; then
+        print_substep "Dashboard: ${BOLD}Yes${NC} (port 3000)"
+    fi
     echo ""
 }
 
@@ -290,6 +322,20 @@ show_quickstart() {
         echo ""
         echo -e "  ${DIM}# Add as MCP server to Claude Code${NC}"
         echo -e "  ${BOLD}claude mcp add claude-flow -- claude-flow mcp start${NC}"
+        echo ""
+        echo -e "  ${CYAN}─── V3 Features ───${NC}"
+        echo ""
+        echo -e "  ${DIM}# Start admin dashboard (http://localhost:3000)${NC}"
+        echo -e "  ${BOLD}claude-flow dashboard start${NC}"
+        echo ""
+        echo -e "  ${DIM}# Initialize swarm with 15-agent hierarchy${NC}"
+        echo -e "  ${BOLD}claude-flow swarm init --topology hierarchical --max-agents 15${NC}"
+        echo ""
+        echo -e "  ${DIM}# Run code review workflow${NC}"
+        echo -e "  ${BOLD}claude-flow workflow run code-review --target ./src${NC}"
+        echo ""
+        echo -e "  ${DIM}# Spawn an agent${NC}"
+        echo -e "  ${BOLD}claude-flow agent spawn -t coder --name my-coder${NC}"
     else
         echo -e "  ${DIM}# Initialize project${NC}"
         echo -e "  ${BOLD}npx claude-flow@alpha init --wizard${NC}"
@@ -299,11 +345,25 @@ show_quickstart() {
         echo ""
         echo -e "  ${DIM}# Add as MCP server to Claude Code${NC}"
         echo -e "  ${BOLD}claude mcp add claude-flow -- npx -y claude-flow@alpha mcp start${NC}"
+        echo ""
+        echo -e "  ${CYAN}─── V3 Features ───${NC}"
+        echo ""
+        echo -e "  ${DIM}# Start admin dashboard (http://localhost:3000)${NC}"
+        echo -e "  ${BOLD}npx claude-flow@alpha dashboard start${NC}"
+        echo ""
+        echo -e "  ${DIM}# Initialize swarm with 15-agent hierarchy${NC}"
+        echo -e "  ${BOLD}npx claude-flow@alpha swarm init --topology hierarchical --max-agents 15${NC}"
+        echo ""
+        echo -e "  ${DIM}# Run code review workflow${NC}"
+        echo -e "  ${BOLD}npx claude-flow@alpha workflow run code-review --target ./src${NC}"
+        echo ""
+        echo -e "  ${DIM}# Spawn an agent${NC}"
+        echo -e "  ${BOLD}npx claude-flow@alpha agent spawn -t coder --name my-coder${NC}"
     fi
 
     echo ""
-    echo -e "${DIM}Documentation: https://github.com/ruvnet/claude-flow${NC}"
-    echo -e "${DIM}Issues: https://github.com/ruvnet/claude-flow/issues${NC}"
+    echo -e "${DIM}Documentation: https://github.com/iamrjc/claude-flow${NC}"
+    echo -e "${DIM}Issues: https://github.com/iamrjc/claude-flow/issues${NC}"
     echo ""
 }
 
@@ -370,6 +430,44 @@ run_init() {
     echo ""
 }
 
+init_swarm() {
+    if [ "$INIT_SWARM" != "1" ]; then
+        return 0
+    fi
+
+    print_step "Initializing swarm coordinator..."
+    echo ""
+
+    if [ "$GLOBAL" = "1" ]; then
+        claude-flow swarm init --topology hierarchical --max-agents 15 2>&1 || true
+    else
+        npx claude-flow@${VERSION} swarm init --topology hierarchical --max-agents 15 2>&1 || true
+    fi
+    print_substep "Swarm initialized with hierarchical topology (15 agents max)"
+    echo ""
+}
+
+start_dashboard() {
+    if [ "$START_DASHBOARD" != "1" ]; then
+        return 0
+    fi
+
+    print_step "Starting admin dashboard..."
+    echo ""
+
+    if [ "$GLOBAL" = "1" ]; then
+        # Start in background
+        nohup claude-flow dashboard start --port 3000 > /tmp/claude-flow-dashboard.log 2>&1 &
+    else
+        nohup npx claude-flow@${VERSION} dashboard start --port 3000 > /tmp/claude-flow-dashboard.log 2>&1 &
+    fi
+
+    sleep 2
+    print_substep "Dashboard running at ${GREEN}http://localhost:3000${NC}"
+    print_substep "Logs: /tmp/claude-flow-dashboard.log"
+    echo ""
+}
+
 # Main
 main() {
     print_banner
@@ -380,9 +478,11 @@ main() {
     setup_mcp_server
     run_doctor
     run_init
+    init_swarm
+    start_dashboard
     show_quickstart
 
-    print_success "${BOLD}Claude Flow is ready!${NC} 🎉"
+    print_success "${BOLD}Claude Flow V3 is ready!${NC} 🎉"
     echo ""
 }
 
