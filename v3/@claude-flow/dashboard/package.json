@@ -1,0 +1,54 @@
+{
+  "name": "@claude-flow/dashboard",
+  "version": "3.0.0-alpha.1",
+  "type": "module",
+  "description": "Admin Dashboard for Claude Flow V3 - Real-time monitoring and control (WP32)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "claude-flow",
+    "dashboard",
+    "admin",
+    "monitoring",
+    "real-time",
+    "control-panel"
+  ],
+  "author": "Claude Flow Team",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.0.16",
+    "@vitest/coverage-v8": "^4.0.16"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "v3alpha"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

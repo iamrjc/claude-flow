@@ -1,0 +1,52 @@
+{
+  "name": "@claude-flow/cache",
+  "version": "3.0.0-alpha.6",
+  "type": "module",
+  "description": "Caching layer with LRU memory, disk, and Redis support for Claude Flow V3",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./stores": "./dist/stores/index.js",
+    "./strategies": "./dist/strategies/index.js",
+    "./invalidation": "./dist/invalidation/index.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "cache",
+    "lru",
+    "redis",
+    "sqlite",
+    "claude-flow",
+    "performance"
+  ],
+  "author": "Claude Flow Team",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "events": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.0.16"
+  },
+  "optionalDependencies": {
+    "ioredis": "^5.4.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "v3alpha"
+  }
+}

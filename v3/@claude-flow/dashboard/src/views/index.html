@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Flow Dashboard</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="dashboard">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <h1>Claude Flow Dashboard</h1>
+        <div class="header-controls">
+          <button id="theme-toggle" class="btn btn-icon" aria-label="Toggle theme">
+            <span class="icon">🌙</span>
+          </button>
+          <span id="connection-status" class="status-badge status-connected">Connected</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- System Status Card -->
+      <section class="card status-card">
+        <div class="card-header">
+          <h2>System Status</h2>
+          <span id="system-status-badge" class="status-badge status-running">Running</span>
+        </div>
+        <div class="card-body">
+          <div class="stats-grid">
+            <div class="stat">
+              <span class="stat-label">Uptime</span>
+              <span id="uptime" class="stat-value">--</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Topology</span>
+              <span id="topology" class="stat-value">--</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Version</span>
+              <span id="version" class="stat-value">--</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Agent Count</span>
+              <span id="agent-count" class="stat-value">--</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Metrics Cards -->
+      <div class="metrics-grid">
+        <!-- Agent Metrics -->
+        <section class="card">
+          <div class="card-header">
+            <h3>Agent Metrics</h3>
+          </div>
+          <div class="card-body">
+            <div class="chart-container">
+              <canvas id="agent-chart"></canvas>
+            </div>
+            <div class="metrics-stats">
+              <div class="metric">
+                <span class="metric-label">Active</span>
+                <span id="active-agents" class="metric-value">0</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Idle</span>
+                <span id="idle-agents" class="metric-value">0</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Utilization</span>
+                <span id="agent-utilization" class="metric-value">0%</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Task Metrics -->
+        <section class="card">
+          <div class="card-header">
+            <h3>Task Metrics</h3>
+          </div>
+          <div class="card-body">
+            <div class="chart-container">
+              <canvas id="task-chart"></canvas>
+            </div>
+            <div class="metrics-stats">
+              <div class="metric">
+                <span class="metric-label">Completed</span>
+                <span id="completed-tasks" class="metric-value">0</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Running</span>
+                <span id="running-tasks" class="metric-value">0</span>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Throughput</span>
+                <span id="task-throughput" class="metric-value">0/min</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Performance Metrics -->
+        <section class="card">
+          <div class="card-header">
+            <h3>Performance</h3>
+          </div>
+          <div class="card-body">
+            <div class="performance-bars">
+              <div class="performance-item">
+                <span class="performance-label">CPU Usage</span>
+                <div class="progress-bar">
+                  <div id="cpu-bar" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <span id="cpu-value" class="performance-value">0%</span>
+              </div>
+              <div class="performance-item">
+                <span class="performance-label">Memory Usage</span>
+                <div class="progress-bar">
+                  <div id="memory-bar" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <span id="memory-value" class="performance-value">0 MB</span>
+              </div>
+              <div class="performance-item">
+                <span class="performance-label">Response Time</span>
+                <div class="progress-bar">
+                  <div id="response-bar" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <span id="response-value" class="performance-value">0 ms</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Agents Table -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Agents</h2>
+          <button id="refresh-agents" class="btn btn-sm">Refresh</button>
+        </div>
+        <div class="card-body">
+          <div class="table-container">
+            <table id="agents-table" class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Tasks</th>
+                  <th>Success Rate</th>
+                  <th>Health</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="agents-tbody">
+                <!-- Populated by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tasks Table -->
+      <section class="card">
+        <div class="card-header">
+          <h2>Tasks</h2>
+          <button id="refresh-tasks" class="btn btn-sm">Refresh</button>
+        </div>
+        <div class="card-body">
+          <div class="table-container">
+            <table id="tasks-table" class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Title</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Priority</th>
+                  <th>Progress</th>
+                  <th>Agent</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="tasks-tbody">
+                <!-- Populated by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Logs Viewer -->
+      <section class="card">
+        <div class="card-header">
+          <h2>System Logs</h2>
+          <div class="log-controls">
+            <button id="clear-logs" class="btn btn-sm">Clear</button>
+            <button id="export-logs" class="btn btn-sm">Export</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <div id="logs-container" class="logs-container">
+            <!-- Populated by JavaScript -->
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/components.js"></script>
+</body>
+</html>

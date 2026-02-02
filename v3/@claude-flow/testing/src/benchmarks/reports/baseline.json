@@ -1,0 +1,205 @@
+{
+  "version": "2.0.0",
+  "timestamp": "2025-01-01T00:00:00.000Z",
+  "description": "V2 baseline performance metrics for comparison with V3",
+  "benchmarks": {
+    "agent": {
+      "spawn": {
+        "mean": 125.5,
+        "median": 120.0,
+        "p95": 180.0,
+        "p99": 220.0,
+        "opsPerSecond": 7.97,
+        "notes": "V2 agent spawn without optimization"
+      },
+      "terminate": {
+        "mean": 45.2,
+        "median": 42.0,
+        "p95": 65.0,
+        "p99": 85.0,
+        "opsPerSecond": 22.12
+      },
+      "poolCreation10": {
+        "mean": 1250.0,
+        "median": 1200.0,
+        "p95": 1500.0,
+        "p99": 1800.0,
+        "opsPerSecond": 0.8
+      },
+      "poolCreation100": {
+        "mean": 12500.0,
+        "median": 12000.0,
+        "p95": 15000.0,
+        "p99": 18000.0,
+        "opsPerSecond": 0.08
+      },
+      "concurrentSpawn50": {
+        "mean": 2500.0,
+        "median": 2400.0,
+        "p95": 3000.0,
+        "p99": 3500.0,
+        "opsPerSecond": 0.4
+      }
+    },
+    "task": {
+      "assignment": {
+        "mean": 15.8,
+        "median": 14.5,
+        "p95": 22.0,
+        "p99": 28.0,
+        "opsPerSecond": 63.29,
+        "notes": "V2 task assignment without optimization"
+      },
+      "throughput100": {
+        "mean": 2500.0,
+        "median": 2400.0,
+        "p95": 3000.0,
+        "p99": 3500.0,
+        "opsPerSecond": 40.0,
+        "notes": "100 tasks in 2.5 seconds = 40 tasks/sec = 2400 tasks/min"
+      },
+      "lifecycle": {
+        "mean": 25.5,
+        "median": 24.0,
+        "p95": 35.0,
+        "p99": 45.0,
+        "opsPerSecond": 39.22
+      }
+    },
+    "memory": {
+      "bruteForceSearch1K": {
+        "mean": 1500.0,
+        "median": 1450.0,
+        "p95": 1800.0,
+        "p99": 2200.0,
+        "opsPerSecond": 0.67,
+        "notes": "V2 brute force vector search on 1K vectors"
+      },
+      "bruteForceSearch10K": {
+        "mean": 15000.0,
+        "median": 14500.0,
+        "p95": 18000.0,
+        "p99": 22000.0,
+        "opsPerSecond": 0.067,
+        "notes": "V2 brute force vector search on 10K vectors"
+      },
+      "bruteForceSearch100K": {
+        "mean": 150000.0,
+        "median": 145000.0,
+        "p95": 180000.0,
+        "p99": 220000.0,
+        "opsPerSecond": 0.0067,
+        "notes": "V2 brute force vector search on 100K vectors"
+      },
+      "insert": {
+        "mean": 5.2,
+        "median": 5.0,
+        "p95": 7.5,
+        "p99": 10.0,
+        "opsPerSecond": 192.31
+      }
+    },
+    "coordination": {
+      "sessionCreation": {
+        "mean": 8.5,
+        "median": 8.0,
+        "p95": 12.0,
+        "p99": 15.0,
+        "opsPerSecond": 117.65
+      },
+      "messagePassing": {
+        "mean": 12.3,
+        "median": 11.5,
+        "p95": 18.0,
+        "p99": 25.0,
+        "opsPerSecond": 81.3
+      },
+      "consensus4": {
+        "mean": 45.0,
+        "median": 42.0,
+        "p95": 65.0,
+        "p99": 80.0,
+        "opsPerSecond": 22.22
+      },
+      "consensus8": {
+        "mean": 85.0,
+        "median": 80.0,
+        "p95": 120.0,
+        "p99": 150.0,
+        "opsPerSecond": 11.76
+      },
+      "consensus16": {
+        "mean": 165.0,
+        "median": 155.0,
+        "p95": 220.0,
+        "p99": 280.0,
+        "opsPerSecond": 6.06
+      }
+    },
+    "provider": {
+      "initialization": {
+        "mean": 250.0,
+        "median": 240.0,
+        "p95": 320.0,
+        "p99": 400.0,
+        "opsPerSecond": 4.0
+      },
+      "request": {
+        "mean": 150.0,
+        "median": 145.0,
+        "p95": 200.0,
+        "p99": 250.0,
+        "opsPerSecond": 6.67,
+        "notes": "Mock request, not actual API call"
+      },
+      "streaming": {
+        "mean": 180.0,
+        "median": 175.0,
+        "p95": 240.0,
+        "p99": 300.0,
+        "opsPerSecond": 5.56
+      },
+      "healthCheck": {
+        "mean": 15.0,
+        "median": 14.0,
+        "p95": 22.0,
+        "p99": 30.0,
+        "opsPerSecond": 66.67
+      }
+    }
+  },
+  "targets": {
+    "agent": {
+      "spawn": {
+        "max": 100.0,
+        "description": "Agent spawn should be <100ms"
+      }
+    },
+    "task": {
+      "assignment": {
+        "max": 10.0,
+        "description": "Task assignment should be <10ms"
+      },
+      "throughput": {
+        "min": 100.0,
+        "unit": "tasks/minute",
+        "description": "Should handle 100+ tasks per minute"
+      }
+    },
+    "memory": {
+      "hnswSpeedup": {
+        "min": 150.0,
+        "max": 12500.0,
+        "description": "HNSW should be 150x-12,500x faster than brute force"
+      }
+    }
+  },
+  "notes": [
+    "V2 baseline metrics collected on similar hardware configuration",
+    "All measurements in milliseconds unless otherwise specified",
+    "Ops/second calculated as 1000 / mean",
+    "HNSW targets based on algorithmic complexity improvements",
+    "Task throughput measured as tasks completed per minute",
+    "Provider benchmarks use mock implementations for consistency"
+  ]
+}

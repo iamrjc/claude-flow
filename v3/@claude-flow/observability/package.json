@@ -1,0 +1,35 @@
+{
+  "name": "@claude-flow/observability",
+  "version": "3.0.0-alpha.1",
+  "type": "module",
+  "description": "Observability module - Logging, metrics, tracing, and health monitoring (WP26)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.16",
+    "vitest": "^4.0.16"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "v3alpha"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

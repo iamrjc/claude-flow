@@ -1,0 +1,37 @@
+{
+  "name": "@claude-flow/realtime",
+  "version": "3.0.0-alpha.1",
+  "type": "module",
+  "description": "WebSocket support for real-time agent/task/swarm events - auto-reconnect, message ordering, backpressure handling",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12",
+    "vitest": "^4.0.16"
+  },
+  "keywords": [
+    "websocket",
+    "realtime",
+    "event-streaming",
+    "pubsub",
+    "agent-events",
+    "task-events",
+    "swarm-coordination"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "tag": "v3alpha"
+  }
+}

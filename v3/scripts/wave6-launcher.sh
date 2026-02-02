@@ -91,7 +91,7 @@ main() {
         tmux new-session -d -s "$TMUX_SESSION" -c "$PROJECT_DIR"
 
         # Send the claude command to the tmux session
-        tmux send-keys -t "$TMUX_SESSION" "claude -p \"\$(cat $PROMPT_FILE)\" 2>&1 | tee -a $LOG_FILE" Enter
+        tmux send-keys -t "$TMUX_SESSION" "claude --dangerously-skip-permissions -p \"\$(cat $PROMPT_FILE)\" 2>&1 | tee -a $LOG_FILE" Enter
 
         log "Claude started in tmux session '$TMUX_SESSION'"
         log "To attach: tmux attach -t $TMUX_SESSION"

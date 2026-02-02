@@ -1,0 +1,68 @@
+{
+  "name": "@claude-flow/streaming",
+  "version": "3.0.0-alpha.1",
+  "description": "Event Streaming (SSE) for Claude Flow V3",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/sse-server.d.ts",
+      "import": "./dist/server/sse-server.js"
+    },
+    "./client": {
+      "types": "./dist/client/sse-client.d.ts",
+      "import": "./dist/client/sse-client.js"
+    },
+    "./streams": {
+      "types": "./dist/streams/index.d.ts",
+      "import": "./dist/streams/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "claude-flow",
+    "streaming",
+    "sse",
+    "server-sent-events",
+    "http2",
+    "real-time",
+    "events"
+  ],
+  "author": "Claude Flow Team",
+  "license": "MIT",
+  "dependencies": {
+    "events": "^3.3.0",
+    "compression": "^1.7.4"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.7.5",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.0.16"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "v3alpha"
+  }
+}

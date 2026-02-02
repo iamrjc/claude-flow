@@ -1,0 +1,57 @@
+{
+  "name": "@claude-flow/throttle",
+  "version": "3.0.0-alpha.1",
+  "type": "module",
+  "description": "Rate limiting & throttling for claude-flow v3 - Token bucket, sliding window, leaky bucket algorithms with provider, agent, and global policies",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./*": "./dist/*.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "rate-limiting",
+    "throttling",
+    "token-bucket",
+    "sliding-window",
+    "leaky-bucket",
+    "backpressure",
+    "circuit-breaker",
+    "claude-flow"
+  ],
+  "author": "Claude Flow Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.11.16",
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.16"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "v3alpha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ruvnet/claude-flow.git",
+    "directory": "v3/@claude-flow/throttle"
+  },
+  "bugs": {
+    "url": "https://github.com/ruvnet/claude-flow/issues"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ]
+}

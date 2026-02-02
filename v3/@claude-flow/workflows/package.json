@@ -1,0 +1,58 @@
+{
+  "name": "@claude-flow/workflows",
+  "version": "3.0.0-alpha.1",
+  "description": "Workflow Templates for Claude Flow V3 - Code Review, Research, Refactoring, Testing, Documentation",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "claude-flow",
+    "workflows",
+    "templates",
+    "code-review",
+    "research",
+    "refactoring",
+    "testing",
+    "documentation",
+    "automation"
+  ],
+  "author": "Claude Flow Team",
+  "license": "MIT",
+  "dependencies": {
+    "@claude-flow/agents": "^3.0.0-alpha.1",
+    "events": "^3.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.0.16",
+    "@vitest/coverage-v8": "^4.0.16"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "v3alpha"
+  }
+}
