@@ -27,13 +27,22 @@ export type LLMProvider =
   | 'custom';
 
 export type LLMModel =
-  // Anthropic Models (2024-2025)
+  // Anthropic Models (2025 - Claude 4.5 family)
+  | 'claude-opus-4-5-20251101'
+  | 'claude-sonnet-4-5-20251101'
+  | 'claude-haiku-4-5-20251101'
+  // Anthropic Models (2024 - Claude 3.5 family)
   | 'claude-3-5-sonnet-20241022'
   | 'claude-3-5-sonnet-latest'
   | 'claude-3-opus-20240229'
   | 'claude-3-sonnet-20240229'
   | 'claude-3-haiku-20240307'
-  // OpenAI Models (2024-2025)
+  // OpenAI Models (2025)
+  | 'gpt-4.5-preview'
+  | 'o1'
+  | 'o1-pro'
+  | 'o3-mini'
+  // OpenAI Models (2024)
   | 'gpt-4o'
   | 'gpt-4o-mini'
   | 'gpt-4-turbo'
@@ -41,8 +50,11 @@ export type LLMModel =
   | 'gpt-3.5-turbo'
   | 'o1-preview'
   | 'o1-mini'
-  | 'o3-mini'
-  // Google Models
+  // Google Models (2025 - Gemini 3)
+  | 'gemini-3-pro-preview'
+  | 'gemini-2.5-pro-preview'
+  // Google Models (2024 - Gemini 2.x)
+  | 'gemini-2.0-flash-exp'
   | 'gemini-2.0-flash'
   | 'gemini-1.5-pro'
   | 'gemini-1.5-flash'

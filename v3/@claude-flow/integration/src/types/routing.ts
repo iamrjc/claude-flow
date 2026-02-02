@@ -16,10 +16,11 @@ export type RoutingTier = 1 | 2 | 3;
 export type ProviderType =
   | 'agent-booster'   // Tier 1: WASM transforms
   | 'ollama'          // Tier 2A: Local models
-  | 'haiku'           // Tier 2B: Claude Haiku
-  | 'gemini'          // Tier 3A: Gemini-3-Pro
-  | 'sonnet'          // Tier 3B: Claude Sonnet
-  | 'opus'            // Tier 3B: Claude Opus
+  | 'haiku'           // Tier 2B: Claude Haiku 4.5
+  | 'gemini'          // Tier 3A: Gemini-3-Pro-Preview
+  | 'sonnet'          // Tier 3B: Claude Sonnet 4.5
+  | 'opus'            // Tier 3C: Claude Opus 4.5
+  | 'o1'              // Tier 3D: OpenAI o1 reasoning
   | 'network';        // Network agent (remote Ollama)
 
 // ===== Task Context Types =====

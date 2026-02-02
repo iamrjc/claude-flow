@@ -1,7 +1,7 @@
 /**
  * V3 Gemini Provider (Enhanced)
  *
- * Supports Gemini 2.0 Flash, 1.5 Pro, and 1.5 Flash models with:
+ * Supports Gemini 3 Pro Preview, Gemini 2.5/2.0, and Gemini 1.5 models with:
  * - Vision support (generateWithImages)
  * - Token counting
  * - Token budget tracking (2M free tokens/day)
@@ -44,17 +44,35 @@ export class GeminiProvider extends BaseProvider {
   readonly name: LLMProvider = 'google';
   readonly capabilities: ProviderCapabilities = {
     supportedModels: [
+      // Gemini 3 (2025)
+      'gemini-3-pro-preview',
+      // Gemini 2.5 (2025)
+      'gemini-2.5-pro-preview',
+      // Gemini 2.0 (2024)
       'gemini-2.0-flash-exp',
+      // Gemini 1.5 (2024)
       'gemini-1.5-pro',
       'gemini-1.5-flash',
     ],
     maxContextLength: {
+      // Gemini 3
+      'gemini-3-pro-preview': 2000000,
+      // Gemini 2.5
+      'gemini-2.5-pro-preview': 2000000,
+      // Gemini 2.0
       'gemini-2.0-flash-exp': 1000000,
+      // Gemini 1.5
       'gemini-1.5-pro': 2000000,
       'gemini-1.5-flash': 1000000,
     },
     maxOutputTokens: {
+      // Gemini 3
+      'gemini-3-pro-preview': 16384,
+      // Gemini 2.5
+      'gemini-2.5-pro-preview': 16384,
+      // Gemini 2.0
       'gemini-2.0-flash-exp': 8192,
+      // Gemini 1.5
       'gemini-1.5-pro': 8192,
       'gemini-1.5-flash': 8192,
     },
@@ -72,11 +90,25 @@ export class GeminiProvider extends BaseProvider {
       concurrentRequests: 100,
     },
     pricing: {
+      // Gemini 3 pricing
+      'gemini-3-pro-preview': {
+        promptCostPer1k: 0.00125,
+        completionCostPer1k: 0.005,
+        currency: 'USD',
+      },
+      // Gemini 2.5 pricing
+      'gemini-2.5-pro-preview': {
+        promptCostPer1k: 0.00125,
+        completionCostPer1k: 0.005,
+        currency: 'USD',
+      },
+      // Gemini 2.0 pricing (free tier)
       'gemini-2.0-flash-exp': {
-        promptCostPer1k: 0.0, // Free tier
+        promptCostPer1k: 0.0,
         completionCostPer1k: 0.0,
         currency: 'USD',
       },
+      // Gemini 1.5 pricing
       'gemini-1.5-pro': {
         promptCostPer1k: 0.00125,
         completionCostPer1k: 0.005,
@@ -281,9 +313,15 @@ export class GeminiProvider extends BaseProvider {
 
   async getModelInfo(model: LLMModel): Promise<ModelInfo> {
     const descriptions: Record<string, string> = {
-      'gemini-2.0-flash-exp': 'Latest Gemini 2.0 experimental with multimodal capabilities',
-      'gemini-1.5-pro': 'Most capable Gemini model with 2M context window',
-      'gemini-1.5-flash': 'Fast and efficient Gemini model',
+      // Gemini 3
+      'gemini-3-pro-preview': 'Gemini 3 Pro Preview - Latest and most capable Gemini model',
+      // Gemini 2.5
+      'gemini-2.5-pro-preview': 'Gemini 2.5 Pro Preview - Advanced reasoning capabilities',
+      // Gemini 2.0
+      'gemini-2.0-flash-exp': 'Gemini 2.0 Flash - Fast multimodal model',
+      // Gemini 1.5
+      'gemini-1.5-pro': 'Gemini 1.5 Pro - 2M context window',
+      'gemini-1.5-flash': 'Gemini 1.5 Flash - Fast and efficient',
     };
 
     return {

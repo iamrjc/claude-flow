@@ -49,10 +49,11 @@ import {
 const PROVIDER_MODELS: Record<ProviderType, string> = {
   'agent-booster': 'wasm-transform',
   'ollama': 'qwen2.5:7b',
-  'haiku': 'claude-3-haiku',
-  'gemini': 'gemini-3-pro',
-  'sonnet': 'claude-3.5-sonnet',
-  'opus': 'claude-3-opus',
+  'haiku': 'claude-haiku-4-5-20251101',
+  'gemini': 'gemini-3-pro-preview',
+  'sonnet': 'claude-sonnet-4-5-20251101',
+  'opus': 'claude-opus-4-5-20251101',
+  'o1': 'o1',
   'network': 'qwen2.5:7b',
 };
 

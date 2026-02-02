@@ -1,7 +1,7 @@
 /**
  * V3 Anthropic (Claude) Provider
  *
- * Supports Claude 3.5, 3 Opus, Sonnet, and Haiku models.
+ * Supports Claude 4.5 (Opus, Sonnet, Haiku) and Claude 3.5/3 models.
  *
  * @module @claude-flow/providers/anthropic-provider
  */
@@ -58,6 +58,11 @@ export class AnthropicProvider extends BaseProvider {
   readonly name: LLMProvider = 'anthropic';
   readonly capabilities: ProviderCapabilities = {
     supportedModels: [
+      // Claude 4.5 family (2025)
+      'claude-opus-4-5-20251101',
+      'claude-sonnet-4-5-20251101',
+      'claude-haiku-4-5-20251101',
+      // Claude 3.5 family (2024)
       'claude-3-5-sonnet-20241022',
       'claude-3-5-sonnet-latest',
       'claude-3-opus-20240229',
@@ -65,6 +70,11 @@ export class AnthropicProvider extends BaseProvider {
       'claude-3-haiku-20240307',
     ],
     maxContextLength: {
+      // Claude 4.5 - 200K context
+      'claude-opus-4-5-20251101': 200000,
+      'claude-sonnet-4-5-20251101': 200000,
+      'claude-haiku-4-5-20251101': 200000,
+      // Claude 3.5/3
       'claude-3-5-sonnet-20241022': 200000,
       'claude-3-5-sonnet-latest': 200000,
       'claude-3-opus-20240229': 200000,
@@ -72,6 +82,11 @@ export class AnthropicProvider extends BaseProvider {
       'claude-3-haiku-20240307': 200000,
     },
     maxOutputTokens: {
+      // Claude 4.5 - 16K output
+      'claude-opus-4-5-20251101': 16384,
+      'claude-sonnet-4-5-20251101': 16384,
+      'claude-haiku-4-5-20251101': 8192,
+      // Claude 3.5/3
       'claude-3-5-sonnet-20241022': 8192,
       'claude-3-5-sonnet-latest': 8192,
       'claude-3-opus-20240229': 4096,
@@ -92,6 +107,23 @@ export class AnthropicProvider extends BaseProvider {
       concurrentRequests: 100,
     },
     pricing: {
+      // Claude 4.5 pricing
+      'claude-opus-4-5-20251101': {
+        promptCostPer1k: 0.015,
+        completionCostPer1k: 0.075,
+        currency: 'USD',
+      },
+      'claude-sonnet-4-5-20251101': {
+        promptCostPer1k: 0.003,
+        completionCostPer1k: 0.015,
+        currency: 'USD',
+      },
+      'claude-haiku-4-5-20251101': {
+        promptCostPer1k: 0.0008,
+        completionCostPer1k: 0.004,
+        currency: 'USD',
+      },
+      // Claude 3.5/3 pricing
       'claude-3-5-sonnet-20241022': {
         promptCostPer1k: 0.003,
         completionCostPer1k: 0.015,
@@ -259,11 +291,16 @@ export class AnthropicProvider extends BaseProvider {
 
   async getModelInfo(model: LLMModel): Promise<ModelInfo> {
     const descriptions: Record<string, string> = {
-      'claude-3-5-sonnet-20241022': 'Latest Claude 3.5 Sonnet - Best balance of intelligence and speed',
+      // Claude 4.5 family
+      'claude-opus-4-5-20251101': 'Claude Opus 4.5 - Most capable model with extended thinking',
+      'claude-sonnet-4-5-20251101': 'Claude Sonnet 4.5 - Best balance of intelligence and speed',
+      'claude-haiku-4-5-20251101': 'Claude Haiku 4.5 - Fastest model for simple tasks',
+      // Claude 3.5/3 family
+      'claude-3-5-sonnet-20241022': 'Claude 3.5 Sonnet - High capability with good speed',
       'claude-3-5-sonnet-latest': 'Claude 3.5 Sonnet latest version',
-      'claude-3-opus-20240229': 'Most capable Claude model for complex tasks',
-      'claude-3-sonnet-20240229': 'Balanced Claude 3 model',
-      'claude-3-haiku-20240307': 'Fastest Claude 3 model for simple tasks',
+      'claude-3-opus-20240229': 'Claude 3 Opus - Complex reasoning tasks',
+      'claude-3-sonnet-20240229': 'Claude 3 Sonnet - Balanced model',
+      'claude-3-haiku-20240307': 'Claude 3 Haiku - Fast and efficient',
     };
 
     return {

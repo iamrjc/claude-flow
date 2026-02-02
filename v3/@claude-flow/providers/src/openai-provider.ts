@@ -1,7 +1,7 @@
 /**
  * V3 OpenAI Provider
  *
- * Supports GPT-4o, GPT-4, o1, and other OpenAI models.
+ * Supports GPT-4.5, GPT-4o, o1, o3, and other OpenAI models.
  *
  * @module @claude-flow/providers/openai-provider
  */
@@ -82,6 +82,12 @@ export class OpenAIProvider extends BaseProvider {
   readonly name: LLMProvider = 'openai';
   readonly capabilities: ProviderCapabilities = {
     supportedModels: [
+      // 2025 models
+      'gpt-4.5-preview',
+      'o1',
+      'o1-pro',
+      'o3-mini',
+      // 2024 models
       'gpt-4o',
       'gpt-4o-mini',
       'gpt-4-turbo',
@@ -89,9 +95,14 @@ export class OpenAIProvider extends BaseProvider {
       'gpt-3.5-turbo',
       'o1-preview',
       'o1-mini',
-      'o3-mini',
     ],
     maxContextLength: {
+      // 2025 models
+      'gpt-4.5-preview': 128000,
+      'o1': 200000,
+      'o1-pro': 200000,
+      'o3-mini': 200000,
+      // 2024 models
       'gpt-4o': 128000,
       'gpt-4o-mini': 128000,
       'gpt-4-turbo': 128000,
@@ -99,9 +110,14 @@ export class OpenAIProvider extends BaseProvider {
       'gpt-3.5-turbo': 16384,
       'o1-preview': 128000,
       'o1-mini': 128000,
-      'o3-mini': 200000,
     },
     maxOutputTokens: {
+      // 2025 models
+      'gpt-4.5-preview': 16384,
+      'o1': 100000,
+      'o1-pro': 100000,
+      'o3-mini': 100000,
+      // 2024 models
       'gpt-4o': 16384,
       'gpt-4o-mini': 16384,
       'gpt-4-turbo': 4096,
@@ -109,7 +125,6 @@ export class OpenAIProvider extends BaseProvider {
       'gpt-3.5-turbo': 4096,
       'o1-preview': 32768,
       'o1-mini': 65536,
-      'o3-mini': 100000,
     },
     supportsStreaming: true,
     supportsToolCalling: true,
@@ -125,6 +140,28 @@ export class OpenAIProvider extends BaseProvider {
       concurrentRequests: 500,
     },
     pricing: {
+      // 2025 models
+      'gpt-4.5-preview': {
+        promptCostPer1k: 0.075,
+        completionCostPer1k: 0.15,
+        currency: 'USD',
+      },
+      'o1': {
+        promptCostPer1k: 0.015,
+        completionCostPer1k: 0.06,
+        currency: 'USD',
+      },
+      'o1-pro': {
+        promptCostPer1k: 0.15,
+        completionCostPer1k: 0.60,
+        currency: 'USD',
+      },
+      'o3-mini': {
+        promptCostPer1k: 0.0011,
+        completionCostPer1k: 0.0044,
+        currency: 'USD',
+      },
+      // 2024 models
       'gpt-4o': {
         promptCostPer1k: 0.0025,
         completionCostPer1k: 0.01,
@@ -158,11 +195,6 @@ export class OpenAIProvider extends BaseProvider {
       'o1-mini': {
         promptCostPer1k: 0.003,
         completionCostPer1k: 0.012,
-        currency: 'USD',
-      },
-      'o3-mini': {
-        promptCostPer1k: 0.0011,
-        completionCostPer1k: 0.0044,
         currency: 'USD',
       },
     },
@@ -325,14 +357,19 @@ export class OpenAIProvider extends BaseProvider {
 
   async getModelInfo(model: LLMModel): Promise<ModelInfo> {
     const descriptions: Record<string, string> = {
-      'gpt-4o': 'Most capable GPT-4 model with vision and audio',
-      'gpt-4o-mini': 'Affordable and intelligent small model',
+      // 2025 models
+      'gpt-4.5-preview': 'GPT-4.5 Preview - Most capable GPT model',
+      'o1': 'o1 - Advanced reasoning model with chain-of-thought',
+      'o1-pro': 'o1 Pro - Premium reasoning with extended compute',
+      'o3-mini': 'o3-mini - Efficient next-gen reasoning model',
+      // 2024 models
+      'gpt-4o': 'GPT-4o - Multimodal model with vision and audio',
+      'gpt-4o-mini': 'GPT-4o Mini - Fast and affordable',
       'gpt-4-turbo': 'GPT-4 Turbo with vision',
-      'gpt-4': 'High capability model',
-      'gpt-3.5-turbo': 'Fast and efficient model',
-      'o1-preview': 'Reasoning model for complex tasks',
-      'o1-mini': 'Fast reasoning model',
-      'o3-mini': 'Latest reasoning model',
+      'gpt-4': 'GPT-4 - High capability model',
+      'gpt-3.5-turbo': 'GPT-3.5 Turbo - Fast and efficient',
+      'o1-preview': 'o1-preview - Reasoning model preview',
+      'o1-mini': 'o1-mini - Compact reasoning model',
     };
 
     return {
